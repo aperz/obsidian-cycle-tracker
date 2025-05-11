@@ -1,0 +1,19 @@
+internal/
+
+# Intellij
+*.iml
+.idea
+
+# Vim
+*.swp
+
+# npm
+node_modules
+package-lock.json
+
+# build
+main.js
+*.js.map
+
+# obsidian
+data.json
