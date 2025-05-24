@@ -130,6 +130,41 @@ export class CycleTrackerSettingTab extends PluginSettingTab {
 			text: 'Configure which symptoms to track and specify the property names used in your daily notes.' 
 		});
 		
+		// Add restore defaults button
+		new Setting(containerEl)
+			.setName('Restore Default Property Names')
+			.setDesc('Reset all property names to their default values')
+			.addButton(button => button
+				.setButtonText('Restore Defaults')
+				.setCta()
+				.onClick(async () => {
+					// Restore all property names to defaults
+					this.plugin.settings.periodFlowProperty = DEFAULT_SETTINGS.periodFlowProperty;
+					this.plugin.settings.dischargeProperty = DEFAULT_SETTINGS.dischargeProperty;
+					this.plugin.settings.crampsProperty = DEFAULT_SETTINGS.crampsProperty;
+					this.plugin.settings.bloatingProperty = DEFAULT_SETTINGS.bloatingProperty;
+					this.plugin.settings.breastTendernessProperty = DEFAULT_SETTINGS.breastTendernessProperty;
+					this.plugin.settings.headachesProperty = DEFAULT_SETTINGS.headachesProperty;
+					this.plugin.settings.bowelChangesProperty = DEFAULT_SETTINGS.bowelChangesProperty;
+					this.plugin.settings.moodProperty = DEFAULT_SETTINGS.moodProperty;
+					this.plugin.settings.energyLevelsProperty = DEFAULT_SETTINGS.energyLevelsProperty;
+					this.plugin.settings.anxietyProperty = DEFAULT_SETTINGS.anxietyProperty;
+					this.plugin.settings.concentrationProperty = DEFAULT_SETTINGS.concentrationProperty;
+					this.plugin.settings.sexDriveProperty = DEFAULT_SETTINGS.sexDriveProperty;
+					this.plugin.settings.physicalActivityProperty = DEFAULT_SETTINGS.physicalActivityProperty;
+					this.plugin.settings.nutritionProperty = DEFAULT_SETTINGS.nutritionProperty;
+					this.plugin.settings.waterIntakeProperty = DEFAULT_SETTINGS.waterIntakeProperty;
+					this.plugin.settings.alcoholConsumptionProperty = DEFAULT_SETTINGS.alcoholConsumptionProperty;
+					this.plugin.settings.medicationProperty = DEFAULT_SETTINGS.medicationProperty;
+					this.plugin.settings.sexualActivityProperty = DEFAULT_SETTINGS.sexualActivityProperty;
+					
+					// Save the settings
+					await this.plugin.saveSettings();
+					
+					// Refresh the settings display to show the updated values
+					this.display();
+				}));
+		
 		// Physical symptoms settings
 		containerEl.createEl('h3', { text: 'Physical Symptoms' });
 		
