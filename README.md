@@ -9,8 +9,8 @@ A plugin for tracking your menstrual cycle and related symptoms within Obsidian.
 - Log lifestyle factors that may affect your cycle
 - View a calendar visualization of your cycle
 - See a summary of days since your last period started
-- Track ovulation and fertile days
-- Customize which symptoms you want to track
+- View probable ovulation and fertile days
+- Customize which symptoms you want to view
 
 ## How It Works
 
@@ -43,12 +43,6 @@ mood:: irritable
 | mood | irritable |
 ```
 
-## Using the Plugin
-
-1. Install the plugin from the Obsidian Community Plugins browser
-2. Configure which symptoms you want to track in the plugin settings
-3. Add the relevant properties to your daily notes (see sample-template.md)
-4. Open the Cycle Tracker by clicking the icon in the left sidebar or using the "Open Cycle Tracker" command
 
 ## Symptoms You Can Track
 
@@ -95,6 +89,10 @@ In the plugin settings, you can:
 
 ## Installation
 
+### Option 1: Install from the Community Plugins page in Obsidian
+
+### Option 2: Install manually
+
 1. Download the latest release from the Releases page
 2. Extract the zip file into your Obsidian plugins folder: `{vault}/.obsidian/plugins/`
 3. Enable the plugin in Obsidian settings
@@ -120,5 +118,6 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 
 ## Acknowledgements
 
+- Built with Claude Sonnet
 - Inspired by the Flo tracker app (https://flo.health/product-tour/tracking-cycle)
 - Built using the Obsidian Sample Plugin as a template 
