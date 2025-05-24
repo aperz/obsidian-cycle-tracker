@@ -187,10 +187,10 @@ export class CycleTrackerView extends ItemView {
             return predictions;
         }
         
-        // Don't predict before the first observation
+        // Don't predict periods before the first observation, but still calculate fertile/ovulation
         if (date < cycleData.lastPeriodStart) {
             predictions.isPredictionValid = false;
-            return predictions;
+            // Don't return early - continue to calculate fertile window and ovulation for past dates
         }
         
         // Calculate days since last period
@@ -504,15 +504,16 @@ export class CycleTrackerView extends ItemView {
                 }
             }
             
-            // Mark fertile window - always predicted
-            if (predictions.isPredictionValid && predictions.isFertileWindow) {
-                // Predicted fertility data
+            // Mark fertile window - always predicted (show for all dates where we can calculate cycle position)
+            if (predictions.isFertileWindow) {
+                // Predicted fertility data - shown for both past and future dates
                 dayElement.addClass("fertile");
                 dayElement.addClass("predicted"); // Add the predicted class for styling
             }
             
-            // Mark ovulation day - always predicted
-            if (predictions.isPredictionValid && predictions.isOvulation) {
+            // Mark ovulation day - always predicted (show for all dates where we can calculate cycle position)
+            if (predictions.isOvulation) {
+                // Predicted ovulation data - shown for both past and future dates
                 dayElement.addClass("ovulation");
                 dayElement.addClass("predicted"); // Add the predicted class for styling
             }
