@@ -343,3 +343,40 @@
         rgba(var(--color-blue-rgb), 0.1) 10px);
     background-color: transparent;
 }
+
+/* Context Menu Styles */
+.cycle-tracker-context-menu {
+    position: absolute;
+    background-color: var(--background-primary);
+    border: 1px solid var(--background-modifier-border);
+    border-radius: 6px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    z-index: 1000;
+    min-width: 120px;
+    padding: 4px 0;
+}
+
+.context-menu-item {
+    padding: 8px 16px;
+    cursor: pointer;
+    font-size: 0.9em;
+    color: var(--text-normal);
+    transition: background-color 0.1s ease;
+}
+
+.context-menu-item:hover {
+    background-color: var(--background-modifier-hover);
+}
+
+.context-menu-item:active {
+    background-color: var(--background-modifier-active);
+}
+
+/* Prevent text selection on calendar days during long press */
+.calendar-day {
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+    user-select: none;
+    -webkit-touch-callout: none;
+}

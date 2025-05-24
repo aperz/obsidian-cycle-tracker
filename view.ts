@@ -1,4 +1,4 @@
-import { ItemView, WorkspaceLeaf, Modal } from 'obsidian';
+import { ItemView, WorkspaceLeaf, Modal, Notice } from 'obsidian';
 import type CycleTracker from './main';
 import { DailySymptoms } from './data';
 
@@ -93,6 +93,8 @@ export class CycleTrackerView extends ItemView {
     currentDisplayMonth: Date;
     selectedDate: Date | null;
     cycleData: any;
+    contextMenu: HTMLElement | null = null;
+    longPressTimer: number | null = null;
 
     constructor(leaf: WorkspaceLeaf, plugin: CycleTracker) {
         super(leaf);
@@ -118,6 +120,9 @@ export class CycleTrackerView extends ItemView {
         const container = this.containerEl.children[1] as HTMLElement;
         container.empty();
         container.addClass("cycle-tracker-view");
+        
+        // Hide any existing context menu when refreshing the view
+        this.hideContextMenu();
 
         // Create the main view structure
         this.renderMainView(container);
@@ -458,11 +463,49 @@ export class CycleTrackerView extends ItemView {
             dayElement.addClass("selected");
         }
         
-        // Make days clickable
+        // Make days clickable and add context menu handlers
         dayElement.addClass("clickable");
-        dayElement.addEventListener("click", () => {
+        
+        // Left click for date selection
+        dayElement.addEventListener("click", (event) => {
+            // Prevent context menu from triggering if it was a long press
+            if (this.longPressTimer) {
+                clearTimeout(this.longPressTimer);
+                this.longPressTimer = null;
+                return;
+            }
             this.selectedDate = new Date(date.getTime());
             this.onOpen(); // Refresh the view
+        });
+        
+        // Right click for context menu (desktop)
+        dayElement.addEventListener("contextmenu", (event) => {
+            event.preventDefault();
+            this.showContextMenu(date, event);
+        });
+        
+        // Touch events for mobile long press
+        dayElement.addEventListener("touchstart", (event) => {
+            this.longPressTimer = window.setTimeout(() => {
+                // Prevent the click event from firing
+                event.preventDefault();
+                this.showContextMenu(date, event);
+                this.longPressTimer = null;
+            }, 500); // 500ms long press
+        });
+        
+        dayElement.addEventListener("touchend", () => {
+            if (this.longPressTimer) {
+                clearTimeout(this.longPressTimer);
+                this.longPressTimer = null;
+            }
+        });
+        
+        dayElement.addEventListener("touchmove", () => {
+            if (this.longPressTimer) {
+                clearTimeout(this.longPressTimer);
+                this.longPressTimer = null;
+            }
         });
         
         // Check for cycle-related markers if we have cycle data
@@ -704,5 +747,125 @@ export class CycleTrackerView extends ItemView {
                 }
             }
         });
+    }
+
+    /**
+     * Create and show context menu for a calendar day
+     */
+    private showContextMenu(date: Date, event: MouseEvent | TouchEvent) {
+        // Remove any existing context menu
+        this.hideContextMenu();
+        
+        // Create context menu element
+        this.contextMenu = document.createElement('div');
+        this.contextMenu.addClass('cycle-tracker-context-menu');
+        
+        // Create menu items
+        const openNoteItem = this.contextMenu.createDiv({ cls: 'context-menu-item' });
+        openNoteItem.setText('Open Daily Note');
+        
+        // Add click handler for opening daily note
+        openNoteItem.addEventListener('click', () => {
+            this.openDailyNote(date);
+            this.hideContextMenu();
+        });
+        
+        // Position the menu
+        const rect = this.containerEl.getBoundingClientRect();
+        let x: number, y: number;
+        
+        if (event instanceof MouseEvent) {
+            x = event.clientX - rect.left;
+            y = event.clientY - rect.top;
+        } else {
+            // Touch event
+            const touch = event.touches[0] || event.changedTouches[0];
+            x = touch.clientX - rect.left;
+            y = touch.clientY - rect.top;
+        }
+        
+        // Add menu to container
+        this.containerEl.appendChild(this.contextMenu);
+        
+        // Adjust position to keep menu within viewport
+        const menuRect = this.contextMenu.getBoundingClientRect();
+        const containerRect = this.containerEl.getBoundingClientRect();
+        
+        if (x + menuRect.width > containerRect.width) {
+            x = containerRect.width - menuRect.width - 10;
+        }
+        if (y + menuRect.height > containerRect.height) {
+            y = y - menuRect.height - 10;
+        }
+        
+        this.contextMenu.style.left = `${x}px`;
+        this.contextMenu.style.top = `${y}px`;
+        
+        // Add click outside handler to close menu
+        setTimeout(() => {
+            document.addEventListener('click', this.hideContextMenuHandler.bind(this));
+        }, 0);
+    }
+    
+    /**
+     * Hide context menu
+     */
+    private hideContextMenu() {
+        if (this.contextMenu) {
+            this.contextMenu.remove();
+            this.contextMenu = null;
+            document.removeEventListener('click', this.hideContextMenuHandler.bind(this));
+        }
+    }
+    
+    /**
+     * Handler for hiding context menu when clicking outside
+     */
+    private hideContextMenuHandler(event: MouseEvent) {
+        if (this.contextMenu && !this.contextMenu.contains(event.target as Node)) {
+            this.hideContextMenu();
+        }
+    }
+    
+    /**
+     * Open or create daily note for the given date
+     */
+    private async openDailyNote(date: Date) {
+        try {
+            // Format date as YYYY-MM-DD
+            const dateStr = date.getFullYear() + '-' + 
+                           String(date.getMonth() + 1).padStart(2, '0') + '-' + 
+                           String(date.getDate()).padStart(2, '0');
+            
+            // Construct file path based on plugin settings
+            const dailyNotesFolder = this.plugin.settings.dailyNotesFolder || 'Daily Notes';
+            const fileName = `${dateStr}.md`;
+            const filePath = `${dailyNotesFolder}/${fileName}`;
+            
+            // Check if file exists
+            const file = this.app.vault.getAbstractFileByPath(filePath);
+            
+            if (file) {
+                // File exists, open it
+                await this.app.workspace.openLinkText(fileName, dailyNotesFolder, true);
+            } else {
+                // File doesn't exist, create it
+                const folder = this.app.vault.getAbstractFileByPath(dailyNotesFolder);
+                if (!folder) {
+                    // Create folder if it doesn't exist
+                    await this.app.vault.createFolder(dailyNotesFolder);
+                }
+                
+                // Create the daily note file
+                const newFile = await this.app.vault.create(filePath, `# ${dateStr}\n\n`);
+                
+                // Open the newly created file
+                await this.app.workspace.openLinkText(newFile.name, dailyNotesFolder, true);
+            }
+        } catch (error) {
+            console.error('Error opening daily note:', error);
+            // Show user-friendly error message
+            new Notice('Failed to open daily note. Please check your daily notes folder setting.');
+        }
     }
 }
