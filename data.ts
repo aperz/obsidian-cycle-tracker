@@ -55,7 +55,8 @@ export class DataHandler {
     async getDailyNotes(startDate: Date, endDate: Date): Promise<TFile[]> {
         const dailyNotes: TFile[] = [];
         const files = this.app.vault.getMarkdownFiles();
-        const dailyNotesFolder = this.plugin.settings.dailyNotesFolder;
+        // Validate folder path to prevent path traversal attacks
+        const dailyNotesFolder = this.validateFolderPath(this.plugin.settings.dailyNotesFolder);
         
         // Filter files that look like daily notes based on naming convention and location
         for (const file of files) {
@@ -153,15 +154,18 @@ export class DataHandler {
         const endDateStr = `${endDate.getFullYear()}-${(endDate.getMonth() + 1).toString().padStart(2, '0')}-${endDate.getDate().toString().padStart(2, '0')}`;
         
         try {
+            // Validate folder path to prevent path traversal attacks
+            const validatedFolderPath = this.validateFolderPath(this.plugin.settings.dailyNotesFolder);
+            
             // Get files from the daily notes folder using a proper Dataview query
             let pages;
             try {
                 // First try with the folder path directly
-                pages = await dataviewApi.pages(`"${this.plugin.settings.dailyNotesFolder}"`);
+                pages = await dataviewApi.pages(`"${validatedFolderPath}"`);
             } catch (queryError) {
                 console.log("First query attempt failed, trying fallback query", queryError);
                 // If that fails, try with a WHERE clause as a fallback
-                pages = await dataviewApi.pages(`WHERE contains(file.folder, "${this.plugin.settings.dailyNotesFolder}")`);
+                pages = await dataviewApi.pages(`WHERE contains(file.folder, "${validatedFolderPath}")`);
             }
             
             // Process the data
@@ -458,6 +462,14 @@ export class DataHandler {
      */
     private escapeRegex(string: string): string {
         return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    }
+    
+    /**
+     * Validate and sanitize folder path to prevent path traversal attacks
+     */
+    private validateFolderPath(folderPath: string): string {
+        // Remove any path traversal attempts and normalize slashes
+        return folderPath.replace(/\.\./g, '').replace(/\/+/g, '/');
     }
     
     /**
