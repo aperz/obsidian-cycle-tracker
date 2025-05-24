@@ -208,13 +208,6 @@ export class DataHandler {
                     // Extract properties based on settings
                     if (settings.trackPeriodFlow && page[settings.periodFlowProperty]) {
                         symptoms.periodFlow = page[settings.periodFlowProperty];
-                        
-                        // If this is a period start (not none/empty) and it's the most recent, update lastPeriodStart
-                        if (symptoms.periodFlow && 
-                            symptoms.periodFlow.toLowerCase() !== "none" && 
-                            (!result.lastPeriodStart || date > result.lastPeriodStart)) {
-                            result.lastPeriodStart = date;
-                        }
                     }
                     
                     // Extract all other properties
@@ -303,7 +296,7 @@ export class DataHandler {
         }
         
         // Calculate periodDuration and cycleLength if we have enough data
-        if (result.lastPeriodStart && result.symptoms.length > 0) {
+        if (result.symptoms.length > 0) {
             this.calculateCycleMetrics(result);
         }
         
@@ -358,13 +351,6 @@ export class DataHandler {
             // Extract properties from content using regex
             if (settings.trackPeriodFlow) {
                 symptoms.periodFlow = this.extractProperty(content, settings.periodFlowProperty);
-                
-                // If this is a period start (not none/empty) and it's the most recent, update lastPeriodStart
-                if (symptoms.periodFlow && 
-                    symptoms.periodFlow.toLowerCase() !== "none" && 
-                    (!result.lastPeriodStart || date > result.lastPeriodStart)) {
-                    result.lastPeriodStart = date;
-                }
             }
             
             // Extract all other properties
@@ -450,7 +436,7 @@ export class DataHandler {
         result.symptoms.sort((a, b) => a.date.getTime() - b.date.getTime());
         
         // Calculate period duration and cycle length using same logic as in dataview method
-        if (result.lastPeriodStart && result.symptoms.length > 0) {
+        if (result.symptoms.length > 0) {
             this.calculateCycleMetrics(result);
         }
         
@@ -507,21 +493,71 @@ export class DataHandler {
     
     /**
      * Calculate period duration and cycle length metrics for cycle data
-     * Extracts common calculation logic used by both data extraction methods
+     * Finds the most recent period sequence and uses its first day as lastPeriodStart
      */
     private calculateCycleMetrics(result: CycleData): void {
-        if (!result.lastPeriodStart || result.symptoms.length === 0) {
+        if (result.symptoms.length === 0) {
             return;
         }
         
         // Sort symptoms by date for chronological processing
         const sortedSymptoms = [...result.symptoms].sort((a, b) => a.date.getTime() - b.date.getTime());
         
+        // Find the most recent period sequence and set lastPeriodStart
+        result.lastPeriodStart = this.findMostRecentPeriodStart(sortedSymptoms);
+        
+        if (!result.lastPeriodStart) {
+            return; // No period data found
+        }
+        
         // Calculate period duration
         result.periodDuration = this.calculatePeriodDuration(result.lastPeriodStart, sortedSymptoms);
         
         // Calculate cycle length
         result.cycleLength = this.calculateCycleLength(result.lastPeriodStart, sortedSymptoms);
+    }
+    
+    /**
+     * Find the first day of the most recent period sequence
+     * A period sequence is consecutive days with period flow, allowing gaps of up to 4 days
+     */
+    private findMostRecentPeriodStart(sortedSymptoms: DailySymptoms[]): Date | null {
+        // Get all dates with period flow, sorted newest first
+        const periodDates = sortedSymptoms
+            .filter(s => s.periodFlow && s.periodFlow.toLowerCase() !== "none")
+            .map(s => s.date)
+            .sort((a, b) => b.getTime() - a.getTime()); // Sort newest first
+        
+        if (periodDates.length === 0) {
+            return null;
+        }
+        
+        // Start from the most recent period date
+        const mostRecentPeriodDate = periodDates[0];
+        let periodSequenceStart = mostRecentPeriodDate;
+        
+        // Work backwards to find the start of this period sequence
+        for (let i = 1; i < periodDates.length; i++) {
+            const currentPeriodDate = periodDates[i];
+            const daysBetween = this.daysBetweenDates(currentPeriodDate, periodSequenceStart);
+            
+            // If the gap is 4 days or less, this period date is part of the same sequence
+            if (daysBetween <= 4) {
+                periodSequenceStart = currentPeriodDate; // Update sequence start to earlier date
+            } else {
+                // Gap is too large, we've found the start of the most recent sequence
+                break;
+            }
+        }
+        
+        return periodSequenceStart;
+    }
+    
+    /**
+     * Calculate days between two dates
+     */
+    private daysBetweenDates(date1: Date, date2: Date): number {
+        return Math.abs(Math.floor((date2.getTime() - date1.getTime()) / (1000 * 60 * 60 * 24)));
     }
     
     /**
