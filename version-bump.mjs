@@ -1,6 +1,8 @@
 import { readFileSync, writeFileSync } from "fs";
 
-const targetVersion = process.argv[2];
+// Get version from package.json (npm updates this first)
+const packageJson = JSON.parse(readFileSync("package.json", "utf8"));
+const targetVersion = packageJson.version;
 const manifest = JSON.parse(readFileSync("manifest.json", "utf8"));
 
 // Check if versions.json exists, create it if it doesn't
@@ -22,6 +24,6 @@ if (targetVersion) {
 
     console.log(`Version updated to ${targetVersion}`);
 } else {
-    console.error("No target version provided");
+    console.error("No target version found in package.json");
     process.exit(1);
 }

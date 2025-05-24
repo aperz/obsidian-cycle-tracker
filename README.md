@@ -106,6 +106,10 @@ In the plugin settings, you can:
 3. Run `npm run dev` to start the development build process
 4. Enable the plugin in Obsidian settings
 
+### Versioning
+Use `npm version` to bump version across relevant files 
+(`manifest.json`, `package.json`, `versions.json`).
+
 ## License
 
 This project is licensed under the MIT License - see the LICENSE file for details.
@@ -113,4 +117,4 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 ## Acknowledgements
 
 - Inspired by the Flo tracker app (https://flo.health/product-tour/tracking-cycle)
-- Built using the Obsidian Sample Plugin as a template
+- Built using the Obsidian Sample Plugin as a template 
