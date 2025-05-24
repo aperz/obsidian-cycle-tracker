@@ -195,7 +195,6 @@ export class CycleTrackerView extends ItemView {
         // Don't predict periods before the first observation, but still calculate fertile/ovulation
         if (date < cycleData.lastPeriodStart) {
             predictions.isPredictionValid = false;
-            // Don't return early - continue to calculate fertile window and ovulation for past dates
         }
         
         // Calculate days since last period
@@ -285,15 +284,7 @@ export class CycleTrackerView extends ItemView {
                     text: predictions.phase
                 });
             }
-            
-            // Display recorded period information if available
-            if (selectedDateSymptoms?.periodFlow && 
-                selectedDateSymptoms.periodFlow.toLowerCase() !== "none") {
-                overviewSection.createDiv({ 
-                    cls: "recorded-period",
-                    text: `Recorded period: ${selectedDateSymptoms.periodFlow}`
-                });
-            }
+
             
             // Only show next period prediction if viewing today's date and prediction is valid
             const today = new Date();
