@@ -117,8 +117,10 @@ export class DataHandler {
         
         try {
             if (this.hasDataviewPlugin()) {
+                console.log(`Attempting to get cycle data with Dataview...`);
                 return await this.getCycleDataWithDataview(settings, startDate, endDate);
             } else {
+                console.log(`Dataview method failed. Attempting to get cycle data manually...`);
                 return await this.getCycleDataManually(settings, startDate, endDate);
             }
         } catch (error) {
@@ -298,79 +300,7 @@ export class DataHandler {
         
         // Calculate periodDuration and cycleLength if we have enough data
         if (result.lastPeriodStart && result.symptoms.length > 0) {
-            // Calculate period duration by counting consecutive days with non-null periodFlow
-            let periodDuration = 0;
-            const sortedSymptoms = [...result.symptoms].sort((a, b) => a.date.getTime() - b.date.getTime());
-            
-            // Find the last period start in the sorted list
-            const lastPeriodStartIndex = sortedSymptoms.findIndex(s => 
-                s.date.getTime() === result.lastPeriodStart!.getTime()
-            );
-            
-            if (lastPeriodStartIndex >= 0) {
-                // Count consecutive days with period flow
-                for (let i = lastPeriodStartIndex; i < sortedSymptoms.length; i++) {
-                    if (sortedSymptoms[i].periodFlow && 
-                        sortedSymptoms[i].periodFlow?.toLowerCase() !== "none") {
-                        periodDuration++;
-                    } else {
-                        break;
-                    }
-                }
-                
-                result.periodDuration = periodDuration > 0 ? periodDuration : 5;
-            }
-            
-            // Try to calculate cycle length by finding the previous period start
-            const allPeriodStarts = sortedSymptoms
-                .filter(s => s.periodFlow && s.periodFlow.toLowerCase() !== "none")
-                .map(s => s.date);
-            
-            if (allPeriodStarts.length >= 2) {
-                // Find the most recent period start before the last one
-                let previousPeriodStart = null;
-                for (let i = allPeriodStarts.length - 2; i >= 0; i--) {
-                    // Check if this is the start of a period (previous day has no period)
-                    const currentDay = allPeriodStarts[i];
-                    const previousDay = new Date(currentDay);
-                    previousDay.setDate(previousDay.getDate() - 1);
-                    
-                    // Check if previous day exists in our data and has no period
-                    const previousDayData = sortedSymptoms.find(s => 
-                        s.date.getFullYear() === previousDay.getFullYear() &&
-                        s.date.getMonth() === previousDay.getMonth() &&
-                        s.date.getDate() === previousDay.getDate()
-                    );
-                    
-                    if (!previousDayData || 
-                        !previousDayData.periodFlow || 
-                        previousDayData.periodFlow.toLowerCase() === "none") {
-                        previousPeriodStart = currentDay;
-                        break;
-                    }
-                }
-                
-                if (previousPeriodStart) {
-                    // Calculate days between the two period starts
-                    const daysBetween = Math.round(
-                        (result.lastPeriodStart.getTime() - previousPeriodStart.getTime()) / 
-                        (1000 * 60 * 60 * 24)
-                    );
-                    
-
-                    // Add this check after calculating daysBetween
-                    if (daysBetween > 0) {
-                        // Only use calculated cycle length if it's reasonable
-                        if (daysBetween >= 18 && daysBetween <= 40) {
-                            result.cycleLength = daysBetween;
-                        } else {
-                            // Log warning about unusual cycle length
-                            console.warn(`Calculated cycle length (${daysBetween} days) is outside typical range. Using default.`);
-                        }
-                    }
-
-                }
-            }
+            this.calculateCycleMetrics(result);
         }
         
         return result;
@@ -517,72 +447,7 @@ export class DataHandler {
         
         // Calculate period duration and cycle length using same logic as in dataview method
         if (result.lastPeriodStart && result.symptoms.length > 0) {
-            // Calculate period duration
-            let periodDuration = 0;
-            const sortedSymptoms = [...result.symptoms].sort((a, b) => a.date.getTime() - b.date.getTime());
-            
-            const lastPeriodStartIndex = sortedSymptoms.findIndex(s => 
-                s.date.getTime() === result.lastPeriodStart!.getTime()
-            );
-            
-            if (lastPeriodStartIndex >= 0) {
-                for (let i = lastPeriodStartIndex; i < sortedSymptoms.length; i++) {
-                    if (sortedSymptoms[i].periodFlow && 
-                        sortedSymptoms[i].periodFlow?.toLowerCase() !== "none") {
-                        periodDuration++;
-                    } else {
-                        break;
-                    }
-                }
-                
-                result.periodDuration = periodDuration > 0 ? periodDuration : 5;
-            }
-            
-            // Calculate cycle length
-            const allPeriodStarts = sortedSymptoms
-                .filter(s => s.periodFlow && s.periodFlow.toLowerCase() !== "none")
-                .map(s => s.date);
-            
-            if (allPeriodStarts.length >= 2) {
-                // Find the most recent period start before the last one
-                let previousPeriodStart = null;
-                for (let i = allPeriodStarts.length - 2; i >= 0; i--) {
-                    const currentDay = allPeriodStarts[i];
-                    const previousDay = new Date(currentDay);
-                    previousDay.setDate(previousDay.getDate() - 1);
-                    
-                    const previousDayData = sortedSymptoms.find(s => 
-                        s.date.getFullYear() === previousDay.getFullYear() &&
-                        s.date.getMonth() === previousDay.getMonth() &&
-                        s.date.getDate() === previousDay.getDate()
-                    );
-                    
-                    if (!previousDayData || 
-                        !previousDayData.periodFlow || 
-                        previousDayData.periodFlow.toLowerCase() === "none") {
-                        previousPeriodStart = currentDay;
-                        break;
-                    }
-                }
-                
-                if (previousPeriodStart) {
-                    const daysBetween = Math.round(
-                        (result.lastPeriodStart.getTime() - previousPeriodStart.getTime()) / 
-                        (1000 * 60 * 60 * 24)
-                    );
-
-                    // Add this check after calculating daysBetween
-                    if (daysBetween > 0) {
-                        // Only use calculated cycle length if it's reasonable
-                        if (daysBetween >= 18 && daysBetween <= 40) {
-                            result.cycleLength = daysBetween;
-                        } else {
-                            // Log warning about unusual cycle length
-                            console.warn(`Calculated cycle length (${daysBetween} days) is outside typical range. Using default.`);
-                        }
-                    }
-                }
-            }
+            this.calculateCycleMetrics(result);
         }
         
         return result;
@@ -616,6 +481,111 @@ export class DataHandler {
         }
         
         return null;
+    }
+    
+    /**
+     * Calculate period duration and cycle length metrics for cycle data
+     * Extracts common calculation logic used by both data extraction methods
+     */
+    private calculateCycleMetrics(result: CycleData): void {
+        if (!result.lastPeriodStart || result.symptoms.length === 0) {
+            return;
+        }
+        
+        // Sort symptoms by date for chronological processing
+        const sortedSymptoms = [...result.symptoms].sort((a, b) => a.date.getTime() - b.date.getTime());
+        
+        // Calculate period duration
+        result.periodDuration = this.calculatePeriodDuration(result.lastPeriodStart, sortedSymptoms);
+        
+        // Calculate cycle length
+        result.cycleLength = this.calculateCycleLength(result.lastPeriodStart, sortedSymptoms);
+    }
+    
+    /**
+     * Calculate period duration by counting consecutive days with period flow from the last period start
+     */
+    private calculatePeriodDuration(lastPeriodStart: Date, sortedSymptoms: DailySymptoms[]): number {
+        // Find the last period start in the sorted list
+        const lastPeriodStartIndex = sortedSymptoms.findIndex(s => 
+            s.date.getTime() === lastPeriodStart.getTime()
+        );
+        
+        if (lastPeriodStartIndex < 0) {
+            return 5; // Default fallback
+        }
+        
+        // Count consecutive days with period flow starting from the last period start
+        let periodDuration = 0;
+        for (let i = lastPeriodStartIndex; i < sortedSymptoms.length; i++) {
+            if (sortedSymptoms[i].periodFlow && 
+                sortedSymptoms[i].periodFlow?.toLowerCase() !== "none") {
+                periodDuration++;
+            } else {
+                break; // Stop at first non-period day
+            }
+        }
+        
+        // Return calculated duration or default to 5 days if no period flow found
+        return periodDuration > 0 ? periodDuration : 5;
+    }
+    
+    /**
+     * Calculate cycle length by finding the previous period start and measuring days between cycles
+     */
+    private calculateCycleLength(lastPeriodStart: Date, sortedSymptoms: DailySymptoms[]): number {
+        // Get all dates with period flow (potential period start dates)
+        const allPeriodStarts = sortedSymptoms
+            .filter(s => s.periodFlow && s.periodFlow.toLowerCase() !== "none")
+            .map(s => s.date);
+        
+        // Need at least 2 periods to calculate cycle length
+        if (allPeriodStarts.length < 2) {
+            return 28; // Default cycle length
+        }
+        
+        // Find the most recent period start before the last one
+        let previousPeriodStart = null;
+        for (let i = allPeriodStarts.length - 2; i >= 0; i--) {
+            // Check if this is the start of a period (previous day has no period)
+            const currentDay = allPeriodStarts[i];
+            const previousDay = new Date(currentDay);
+            previousDay.setDate(previousDay.getDate() - 1);
+            
+            // Check if previous day exists in our data and has no period
+            const previousDayData = sortedSymptoms.find(s => 
+                s.date.getFullYear() === previousDay.getFullYear() &&
+                s.date.getMonth() === previousDay.getMonth() &&
+                s.date.getDate() === previousDay.getDate()
+            );
+            
+            // This is a period start if the previous day has no period data or no period flow
+            if (!previousDayData || 
+                !previousDayData.periodFlow || 
+                previousDayData.periodFlow.toLowerCase() === "none") {
+                previousPeriodStart = currentDay;
+                break;
+            }
+        }
+        
+        // Calculate cycle length if we found a previous period start
+        if (previousPeriodStart) {
+            const daysBetween = Math.round(
+                (lastPeriodStart.getTime() - previousPeriodStart.getTime()) / 
+                (1000 * 60 * 60 * 24)
+            );
+            
+            // Validate cycle length is within reasonable range
+            if (daysBetween > 0 && daysBetween >= 18 && daysBetween <= 40) {
+                return daysBetween;
+            } else if (daysBetween > 0) {
+                // Log warning about unusual cycle length but don't use it
+                console.warn(`Calculated cycle length (${daysBetween} days) is outside typical range. Using default.`);
+            }
+        }
+        
+        // Return default cycle length if calculation failed or was outside normal range
+        return 28;
     }
     
     /**

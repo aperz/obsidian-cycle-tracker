@@ -110,6 +110,10 @@ In the plugin settings, you can:
 Use `npm version` to bump version across relevant files 
 (`manifest.json`, `package.json`, `versions.json`).
 
+
+### Adding and modifying variables
+To add or modify variables to track, modify `setting.ts`
+
 ## License
 
 This project is licensed under the MIT License - see the LICENSE file for details.
