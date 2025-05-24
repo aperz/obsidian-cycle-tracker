@@ -454,27 +454,37 @@ export class DataHandler {
     }
     
     /**
+     * Escape special regex characters to prevent regex injection attacks
+     */
+    private escapeRegex(string: string): string {
+        return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    }
+    
+    /**
      * Extract a property value from note content
+     * Uses escaped regex patterns to prevent injection attacks
      */
     extractProperty(content: string, propertyName: string): string | null {
         // Try various property formats:
+        // Escape the property name to prevent regex injection attacks
+        const escapedProperty = this.escapeRegex(propertyName);
         
         // YAML front matter format
-        const yamlRegex = new RegExp(`${propertyName}:\\s*(.+?)(?:$|\\n)`, 'i');
+        const yamlRegex = new RegExp(`${escapedProperty}:\\s*(.+?)(?:$|\\n)`, 'i');
         const yamlMatch = content.match(yamlRegex);
         if (yamlMatch && yamlMatch[1]) {
             return yamlMatch[1].trim();
         }
         
         // Dataview inline format
-        const inlineRegex = new RegExp(`${propertyName}::(.+?)(?:$|\\n)`, 'i');
+        const inlineRegex = new RegExp(`${escapedProperty}::(.+?)(?:$|\\n)`, 'i');
         const inlineMatch = content.match(inlineRegex);
         if (inlineMatch && inlineMatch[1]) {
             return inlineMatch[1].trim();
         }
         
         // Property in table format
-        const tableRegex = new RegExp(`\\|\\s*${propertyName}\\s*\\|\\s*(.+?)\\s*\\|`, 'i');
+        const tableRegex = new RegExp(`\\|\\s*${escapedProperty}\\s*\\|\\s*(.+?)\\s*\\|`, 'i');
         const tableMatch = content.match(tableRegex);
         if (tableMatch && tableMatch[1]) {
             return tableMatch[1].trim();
