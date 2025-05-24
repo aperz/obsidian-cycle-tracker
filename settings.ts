@@ -99,10 +99,142 @@ export const DEFAULT_SETTINGS: CycleTrackerSettings = {
 
 export class CycleTrackerSettingTab extends PluginSettingTab {
 	plugin: CycleTracker;
+	// Store previous valid values for rollback on invalid input
+	private previousValidValues: { [key: string]: string } = {};
+	// Store error elements for each property field
+	private errorElements: { [key: string]: HTMLElement } = {};
 
 	constructor(app: App, plugin: CycleTracker) {
 		super(app, plugin);
 		this.plugin = plugin;
+		// Initialize previous valid values with current settings
+		this.initializePreviousValidValues();
+	}
+	
+	/**
+	 * Initialize previous valid values with current settings
+	 */
+	private initializePreviousValidValues(): void {
+		this.previousValidValues = {
+			periodFlowProperty: this.plugin.settings.periodFlowProperty,
+			dischargeProperty: this.plugin.settings.dischargeProperty,
+			crampsProperty: this.plugin.settings.crampsProperty,
+			bloatingProperty: this.plugin.settings.bloatingProperty,
+			breastTendernessProperty: this.plugin.settings.breastTendernessProperty,
+			headachesProperty: this.plugin.settings.headachesProperty,
+			bowelChangesProperty: this.plugin.settings.bowelChangesProperty,
+			moodProperty: this.plugin.settings.moodProperty,
+			energyLevelsProperty: this.plugin.settings.energyLevelsProperty,
+			anxietyProperty: this.plugin.settings.anxietyProperty,
+			concentrationProperty: this.plugin.settings.concentrationProperty,
+			sexDriveProperty: this.plugin.settings.sexDriveProperty,
+			physicalActivityProperty: this.plugin.settings.physicalActivityProperty,
+			nutritionProperty: this.plugin.settings.nutritionProperty,
+			waterIntakeProperty: this.plugin.settings.waterIntakeProperty,
+			alcoholConsumptionProperty: this.plugin.settings.alcoholConsumptionProperty,
+			medicationProperty: this.plugin.settings.medicationProperty,
+			sexualActivityProperty: this.plugin.settings.sexualActivityProperty
+		};
+	}
+	
+	/**
+	 * Validate YAML property name
+	 * Valid YAML keys can contain letters, numbers, underscores, and hyphens
+	 * They should not start with a number and should not contain spaces or special characters
+	 */
+	private validatePropertyName(propertyName: string): { valid: boolean; error?: string } {
+		if (!propertyName || propertyName.trim() === '') {
+			return { valid: false, error: 'Property name cannot be empty' };
+		}
+		
+		const trimmed = propertyName.trim();
+		
+		// Check if property name contains only valid characters
+		if (!/^[a-zA-Z_][a-zA-Z0-9_-]*$/.test(trimmed)) {
+			return { 
+				valid: false, 
+				error: 'Property name must start with a letter or underscore and contain only letters, numbers, underscores, and hyphens' 
+			};
+		}
+		
+		// Check reasonable length limits
+		if (trimmed.length > 50) {
+			return { valid: false, error: 'Property name must be 50 characters or less' };
+		}
+		
+		return { valid: true };
+	}
+	
+	/**
+	 * Show error message for a specific property field
+	 */
+	private showError(propertyKey: string, errorMessage: string): void {
+		if (this.errorElements[propertyKey]) {
+			this.errorElements[propertyKey].textContent = errorMessage;
+			this.errorElements[propertyKey].style.display = 'block';
+		}
+	}
+	
+	/**
+	 * Hide error message for a specific property field
+	 */
+	private hideError(propertyKey: string): void {
+		if (this.errorElements[propertyKey]) {
+			this.errorElements[propertyKey].style.display = 'none';
+		}
+	}
+	
+	/**
+	 * Create a property setting with validation
+	 */
+	private createPropertySetting(
+		containerEl: HTMLElement,
+		name: string,
+		desc: string,
+		trackingSettingKey: keyof CycleTrackerSettings,
+		propertySettingKey: keyof CycleTrackerSettings,
+		placeholder: string
+	): void {
+		const setting = new Setting(containerEl)
+			.setName(name)
+			.setDesc(desc)
+			.addToggle(toggle => toggle
+				.setValue(this.plugin.settings[trackingSettingKey] as boolean)
+				.onChange(async (value) => {
+					(this.plugin.settings[trackingSettingKey] as boolean) = value;
+					await this.plugin.saveSettings();
+				}))
+			.addText(text => {
+				text.setPlaceholder(placeholder)
+					.setValue(this.plugin.settings[propertySettingKey] as string)
+					.onChange(async (value) => {
+						const validation = this.validatePropertyName(value);
+						
+						if (validation.valid) {
+							// Valid input - save it and update previous valid value
+							const trimmedValue = value.trim();
+							(this.plugin.settings[propertySettingKey] as string) = trimmedValue;
+							this.previousValidValues[propertySettingKey as string] = trimmedValue;
+							await this.plugin.saveSettings();
+							this.hideError(propertySettingKey as string);
+						} else {
+							// Invalid input - show error and revert to previous valid value
+							this.showError(propertySettingKey as string, validation.error!);
+							// Revert the input field to the previous valid value after a short delay
+							setTimeout(() => {
+								text.setValue(this.previousValidValues[propertySettingKey as string]);
+							}, 100);
+						}
+					});
+			});
+		
+		// Create error message element
+		const errorEl = setting.settingEl.createEl('div', {
+			cls: 'setting-item-description',
+			text: '',
+			attr: { style: 'color: var(--text-error); display: none; margin-top: 4px;' }
+		});
+		this.errorElements[propertySettingKey as string] = errorEl;
 	}
 
 	display(): void {
@@ -127,7 +259,7 @@ export class CycleTrackerSettingTab extends PluginSettingTab {
 		
 		// Add description
 		containerEl.createEl('p', { 
-			text: 'Configure which symptoms to track and specify the property names used in your daily notes.' 
+			text: 'Configure which symptoms to track and specify the property names used in your daily notes. Property names must be valid YAML identifiers.' 
 		});
 		
 		// Add restore defaults button
@@ -158,6 +290,9 @@ export class CycleTrackerSettingTab extends PluginSettingTab {
 					this.plugin.settings.medicationProperty = DEFAULT_SETTINGS.medicationProperty;
 					this.plugin.settings.sexualActivityProperty = DEFAULT_SETTINGS.sexualActivityProperty;
 					
+					// Update the previous valid values as well
+					this.initializePreviousValidValues();
+					
 					// Save the settings
 					await this.plugin.saveSettings();
 					
@@ -168,324 +303,187 @@ export class CycleTrackerSettingTab extends PluginSettingTab {
 		// Physical symptoms settings
 		containerEl.createEl('h3', { text: 'Physical Symptoms' });
 		
-		new Setting(containerEl)
-			.setName('Track Period Flow')
-			.setDesc('Track period flow intensity (none, light, medium, heavy)')
-			.addToggle(toggle => toggle
-				.setValue(this.plugin.settings.trackPeriodFlow)
-				.onChange(async (value) => {
-					this.plugin.settings.trackPeriodFlow = value;
-					await this.plugin.saveSettings();
-				}))
-			.addText(text => text
-				.setPlaceholder('period_flow')
-				.setValue(this.plugin.settings.periodFlowProperty)
-				.onChange(async (value) => {
-					this.plugin.settings.periodFlowProperty = value;
-					await this.plugin.saveSettings();
-				}));
-				
-		new Setting(containerEl)
-			.setName('Track Vaginal Discharge')
-			.setDesc('Track vaginal discharge (amount, texture, color)')
-			.addToggle(toggle => toggle
-				.setValue(this.plugin.settings.trackDischarge)
-				.onChange(async (value) => {
-					this.plugin.settings.trackDischarge = value;
-					await this.plugin.saveSettings();
-				}))
-			.addText(text => text
-				.setPlaceholder('discharge')
-				.setValue(this.plugin.settings.dischargeProperty)
-				.onChange(async (value) => {
-					this.plugin.settings.dischargeProperty = value;
-					await this.plugin.saveSettings();
-				}));
-				
-		new Setting(containerEl)
-			.setName('Track Cramps')
-			.setDesc('Track if cramps are present (yes, no)')
-			.addToggle(toggle => toggle
-				.setValue(this.plugin.settings.trackCramps)
-				.onChange(async (value) => {
-					this.plugin.settings.trackCramps = value;
-					await this.plugin.saveSettings();
-				}))
-			.addText(text => text
-				.setPlaceholder('cramps')
-				.setValue(this.plugin.settings.crampsProperty)
-				.onChange(async (value) => {
-					this.plugin.settings.crampsProperty = value;
-					await this.plugin.saveSettings();
-				}));
-				
-		new Setting(containerEl)
-			.setName('Track Bloating')
-			.setDesc('Track if bloating is present (yes, no)')
-			.addToggle(toggle => toggle
-				.setValue(this.plugin.settings.trackBloating)
-				.onChange(async (value) => {
-					this.plugin.settings.trackBloating = value;
-					await this.plugin.saveSettings();
-				}))
-			.addText(text => text
-				.setPlaceholder('bloating')
-				.setValue(this.plugin.settings.bloatingProperty)
-				.onChange(async (value) => {
-					this.plugin.settings.bloatingProperty = value;
-					await this.plugin.saveSettings();
-				}));
-				
-		new Setting(containerEl)
-			.setName('Track Breast Tenderness')
-			.setDesc('Track if breast tenderness is present (yes, no)')
-			.addToggle(toggle => toggle
-				.setValue(this.plugin.settings.trackBreastTenderness)
-				.onChange(async (value) => {
-					this.plugin.settings.trackBreastTenderness = value;
-					await this.plugin.saveSettings();
-				}))
-			.addText(text => text
-				.setPlaceholder('breast_tenderness')
-				.setValue(this.plugin.settings.breastTendernessProperty)
-				.onChange(async (value) => {
-					this.plugin.settings.breastTendernessProperty = value;
-					await this.plugin.saveSettings();
-				}));
-				
-		new Setting(containerEl)
-			.setName('Track Headaches/Migraines')
-			.setDesc('Track if headaches are present (yes, no)')
-			.addToggle(toggle => toggle
-				.setValue(this.plugin.settings.trackHeadaches)
-				.onChange(async (value) => {
-					this.plugin.settings.trackHeadaches = value;
-					await this.plugin.saveSettings();
-				}))
-			.addText(text => text
-				.setPlaceholder('headaches')
-				.setValue(this.plugin.settings.headachesProperty)
-				.onChange(async (value) => {
-					this.plugin.settings.headachesProperty = value;
-					await this.plugin.saveSettings();
-				}));
-				
-		new Setting(containerEl)
-			.setName('Track Bowel Changes')
-			.setDesc('Track bowel changes (none, constipation, diarrhea)')
-			.addToggle(toggle => toggle
-				.setValue(this.plugin.settings.trackBowelChanges)
-				.onChange(async (value) => {
-					this.plugin.settings.trackBowelChanges = value;
-					await this.plugin.saveSettings();
-				}))
-			.addText(text => text
-				.setPlaceholder('bowel_changes')
-				.setValue(this.plugin.settings.bowelChangesProperty)
-				.onChange(async (value) => {
-					this.plugin.settings.bowelChangesProperty = value;
-					await this.plugin.saveSettings();
-				}));
+		this.createPropertySetting(
+			containerEl,
+			'Track Period Flow',
+			'Track period flow intensity (none, light, medium, heavy)',
+			'trackPeriodFlow',
+			'periodFlowProperty',
+			'period_flow'
+		);
+		
+		this.createPropertySetting(
+			containerEl,
+			'Track Vaginal Discharge',
+			'Track vaginal discharge (amount, texture, color)',
+			'trackDischarge',
+			'dischargeProperty',
+			'discharge'
+		);
+		
+		this.createPropertySetting(
+			containerEl,
+			'Track Cramps',
+			'Track if cramps are present (yes, no)',
+			'trackCramps',
+			'crampsProperty',
+			'cramps'
+		);
+		
+		this.createPropertySetting(
+			containerEl,
+			'Track Bloating',
+			'Track if bloating is present (yes, no)',
+			'trackBloating',
+			'bloatingProperty',
+			'bloating'
+		);
+		
+		this.createPropertySetting(
+			containerEl,
+			'Track Breast Tenderness',
+			'Track if breast tenderness is present (yes, no)',
+			'trackBreastTenderness',
+			'breastTendernessProperty',
+			'breast_tenderness'
+		);
+		
+		this.createPropertySetting(
+			containerEl,
+			'Track Headaches/Migraines',
+			'Track if headaches are present (yes, no)',
+			'trackHeadaches',
+			'headachesProperty',
+			'headaches'
+		);
+		
+		this.createPropertySetting(
+			containerEl,
+			'Track Bowel Changes',
+			'Track bowel changes (none, constipation, diarrhea)',
+			'trackBowelChanges',
+			'bowelChangesProperty',
+			'bowel_changes'
+		);
 				
 		// Emotional & Mental State settings
 		containerEl.createEl('h3', { text: 'Emotional & Mental State' });
 		
-		new Setting(containerEl)
-			.setName('Track Mood')
-			.setDesc('Track mood (happy, sad, irritable, anxious, etc.)')
-			.addToggle(toggle => toggle
-				.setValue(this.plugin.settings.trackMood)
-				.onChange(async (value) => {
-					this.plugin.settings.trackMood = value;
-					await this.plugin.saveSettings();
-				}))
-			.addText(text => text
-				.setPlaceholder('mood')
-				.setValue(this.plugin.settings.moodProperty)
-				.onChange(async (value) => {
-					this.plugin.settings.moodProperty = value;
-					await this.plugin.saveSettings();
-				}));
-				
-		new Setting(containerEl)
-			.setName('Track Energy Levels')
-			.setDesc('Track energy levels (low, medium, high)')
-			.addToggle(toggle => toggle
-				.setValue(this.plugin.settings.trackEnergyLevels)
-				.onChange(async (value) => {
-					this.plugin.settings.trackEnergyLevels = value;
-					await this.plugin.saveSettings();
-				}))
-			.addText(text => text
-				.setPlaceholder('energy')
-				.setValue(this.plugin.settings.energyLevelsProperty)
-				.onChange(async (value) => {
-					this.plugin.settings.energyLevelsProperty = value;
-					await this.plugin.saveSettings();
-				}));
-				
-		new Setting(containerEl)
-			.setName('Track Anxiety')
-			.setDesc('Track anxiety levels (none, low, high)')
-			.addToggle(toggle => toggle
-				.setValue(this.plugin.settings.trackAnxiety)
-				.onChange(async (value) => {
-					this.plugin.settings.trackAnxiety = value;
-					await this.plugin.saveSettings();
-				}))
-			.addText(text => text
-				.setPlaceholder('anxiety')
-				.setValue(this.plugin.settings.anxietyProperty)
-				.onChange(async (value) => {
-					this.plugin.settings.anxietyProperty = value;
-					await this.plugin.saveSettings();
-				}));
-				
-		new Setting(containerEl)
-			.setName('Track Concentration')
-			.setDesc('Track concentration levels (low, medium, high)')
-			.addToggle(toggle => toggle
-				.setValue(this.plugin.settings.trackConcentration)
-				.onChange(async (value) => {
-					this.plugin.settings.trackConcentration = value;
-					await this.plugin.saveSettings();
-				}))
-			.addText(text => text
-				.setPlaceholder('concentration')
-				.setValue(this.plugin.settings.concentrationProperty)
-				.onChange(async (value) => {
-					this.plugin.settings.concentrationProperty = value;
-					await this.plugin.saveSettings();
-				}));
-				
-		new Setting(containerEl)
-			.setName('Track Sex Drive')
-			.setDesc('Track sex drive (low, medium, high)')
-			.addToggle(toggle => toggle
-				.setValue(this.plugin.settings.trackSexDrive)
-				.onChange(async (value) => {
-					this.plugin.settings.trackSexDrive = value;
-					await this.plugin.saveSettings();
-				}))
-			.addText(text => text
-				.setPlaceholder('sex_drive')
-				.setValue(this.plugin.settings.sexDriveProperty)
-				.onChange(async (value) => {
-					this.plugin.settings.sexDriveProperty = value;
-					await this.plugin.saveSettings();
-				}));
-				
+		this.createPropertySetting(
+			containerEl,
+			'Track Mood',
+			'Track mood (happy, sad, irritable, anxious, etc.)',
+			'trackMood',
+			'moodProperty',
+			'mood'
+		);
+		
+		this.createPropertySetting(
+			containerEl,
+			'Track Energy Levels',
+			'Track energy levels (low, medium, high)',
+			'trackEnergyLevels',
+			'energyLevelsProperty',
+			'energy'
+		);
+		
+		this.createPropertySetting(
+			containerEl,
+			'Track Anxiety',
+			'Track anxiety levels (none, low, high)',
+			'trackAnxiety',
+			'anxietyProperty',
+			'anxiety'
+		);
+		
+		this.createPropertySetting(
+			containerEl,
+			'Track Concentration',
+			'Track concentration levels (low, medium, high)',
+			'trackConcentration',
+			'concentrationProperty',
+			'concentration'
+		);
+		
+		this.createPropertySetting(
+			containerEl,
+			'Track Sex Drive',
+			'Track sex drive (low, medium, high)',
+			'trackSexDrive',
+			'sexDriveProperty',
+			'sex_drive'
+		);
+		
 		// Lifestyle Factors settings
 		containerEl.createEl('h3', { text: 'Lifestyle Factors' });
 		
-		new Setting(containerEl)
-			.setName('Track Physical Activity')
-			.setDesc('Track physical activity/exercise (type, duration, intensity)')
-			.addToggle(toggle => toggle
-				.setValue(this.plugin.settings.trackPhysicalActivity)
-				.onChange(async (value) => {
-					this.plugin.settings.trackPhysicalActivity = value;
-					await this.plugin.saveSettings();
-				}))
-			.addText(text => text
-				.setPlaceholder('physical_activity')
-				.setValue(this.plugin.settings.physicalActivityProperty)
-				.onChange(async (value) => {
-					this.plugin.settings.physicalActivityProperty = value;
-					await this.plugin.saveSettings();
-				}));
-				
-		new Setting(containerEl)
-			.setName('Track Nutrition')
-			.setDesc('Track nutrition (cravings, appetite changes)')
-			.addToggle(toggle => toggle
-				.setValue(this.plugin.settings.trackNutrition)
-				.onChange(async (value) => {
-					this.plugin.settings.trackNutrition = value;
-					await this.plugin.saveSettings();
-				}))
-			.addText(text => text
-				.setPlaceholder('nutrition')
-				.setValue(this.plugin.settings.nutritionProperty)
-				.onChange(async (value) => {
-					this.plugin.settings.nutritionProperty = value;
-					await this.plugin.saveSettings();
-				}));
-				
-		new Setting(containerEl)
-			.setName('Track Water Intake')
-			.setDesc('Track water intake')
-			.addToggle(toggle => toggle
-				.setValue(this.plugin.settings.trackWaterIntake)
-				.onChange(async (value) => {
-					this.plugin.settings.trackWaterIntake = value;
-					await this.plugin.saveSettings();
-				}))
-			.addText(text => text
-				.setPlaceholder('water_intake')
-				.setValue(this.plugin.settings.waterIntakeProperty)
-				.onChange(async (value) => {
-					this.plugin.settings.waterIntakeProperty = value;
-					await this.plugin.saveSettings();
-				}));
-				
-		new Setting(containerEl)
-			.setName('Track Alcohol Consumption')
-			.setDesc('Track alcohol consumption')
-			.addToggle(toggle => toggle
-				.setValue(this.plugin.settings.trackAlcoholConsumption)
-				.onChange(async (value) => {
-					this.plugin.settings.trackAlcoholConsumption = value;
-					await this.plugin.saveSettings();
-				}))
-			.addText(text => text
-				.setPlaceholder('alcohol')
-				.setValue(this.plugin.settings.alcoholConsumptionProperty)
-				.onChange(async (value) => {
-					this.plugin.settings.alcoholConsumptionProperty = value;
-					await this.plugin.saveSettings();
-				}));
-				
-		new Setting(containerEl)
-			.setName('Track Medication')
-			.setDesc('Track medication taken (including supplements, birth control)')
-			.addToggle(toggle => toggle
-				.setValue(this.plugin.settings.trackMedication)
-				.onChange(async (value) => {
-					this.plugin.settings.trackMedication = value;
-					await this.plugin.saveSettings();
-				}))
-			.addText(text => text
-				.setPlaceholder('medication')
-				.setValue(this.plugin.settings.medicationProperty)
-				.onChange(async (value) => {
-					this.plugin.settings.medicationProperty = value;
-					await this.plugin.saveSettings();
-				}));
-				
-		new Setting(containerEl)
-			.setName('Track Sexual Activity')
-			.setDesc('Track sexual activity (protected/unprotected)')
-			.addToggle(toggle => toggle
-				.setValue(this.plugin.settings.trackSexualActivity)
-				.onChange(async (value) => {
-					this.plugin.settings.trackSexualActivity = value;
-					await this.plugin.saveSettings();
-				}))
-			.addText(text => text
-				.setPlaceholder('sexual_activity')
-				.setValue(this.plugin.settings.sexualActivityProperty)
-				.onChange(async (value) => {
-					this.plugin.settings.sexualActivityProperty = value;
-					await this.plugin.saveSettings();
-				}));
+		this.createPropertySetting(
+			containerEl,
+			'Track Physical Activity',
+			'Track physical activity/exercise (type, duration, intensity)',
+			'trackPhysicalActivity',
+			'physicalActivityProperty',
+			'physical_activity'
+		);
+		
+		this.createPropertySetting(
+			containerEl,
+			'Track Nutrition',
+			'Track nutrition (cravings, appetite changes)',
+			'trackNutrition',
+			'nutritionProperty',
+			'nutrition'
+		);
+		
+		this.createPropertySetting(
+			containerEl,
+			'Track Water Intake',
+			'Track water intake',
+			'trackWaterIntake',
+			'waterIntakeProperty',
+			'water_intake'
+		);
+		
+		this.createPropertySetting(
+			containerEl,
+			'Track Alcohol Consumption',
+			'Track alcohol consumption',
+			'trackAlcoholConsumption',
+			'alcoholConsumptionProperty',
+			'alcohol'
+		);
+		
+		this.createPropertySetting(
+			containerEl,
+			'Track Medication',
+			'Track medication taken (including supplements, birth control)',
+			'trackMedication',
+			'medicationProperty',
+			'medication'
+		);
+		
+		this.createPropertySetting(
+			containerEl,
+			'Track Sexual Activity',
+			'Track sexual activity (protected/unprotected)',
+			'trackSexualActivity',
+			'sexualActivityProperty',
+			'sexual_activity'
+		);
 				
 		// Add help information
 		containerEl.createEl('h3', { text: 'How to Use' });
 		const helpText = containerEl.createEl('div');
 		helpText.innerHTML = `
 			<p>This plugin reads property values from your daily notes to track your menstrual cycle and related symptoms.</p>
-			<p>Add properties to your daily notes using one of these formats:</p>
+			<p><strong>Property Name Requirements:</strong></p>
+			<ul>
+				<li>Must start with a letter or underscore</li>
+				<li>Can contain letters, numbers, underscores, and hyphens</li>
+				<li>No spaces or special characters allowed</li>
+				<li>Maximum 50 characters</li>
+			</ul>
+			<p><strong>Add properties to your daily notes using one of these formats:</strong></p>
 			<pre>---
 period_flow: medium
 cramps: yes
