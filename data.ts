@@ -30,6 +30,8 @@ export interface DailySymptoms {
     alcoholConsumption: string | null;
     medication: string | null;
     sexualActivity: string | null;
+    // Calculated fields
+    cycleDay: number | null; // Day number in the cycle (1-based)
 }
 
 export class DataHandler {
@@ -202,7 +204,8 @@ export class DataHandler {
                         waterIntake: null,
                         alcoholConsumption: null,
                         medication: null,
-                        sexualActivity: null
+                        sexualActivity: null,
+                        cycleDay: null // Will be calculated later
                     };
                     
                     // Extract properties based on settings
@@ -345,7 +348,8 @@ export class DataHandler {
                 waterIntake: null,
                 alcoholConsumption: null,
                 medication: null,
-                sexualActivity: null
+                sexualActivity: null,
+                cycleDay: null // Will be calculated later
             };
             
             // Extract properties from content using regex
@@ -515,6 +519,9 @@ export class DataHandler {
         
         // Calculate cycle length
         result.cycleLength = this.calculateCycleLength(result.lastPeriodStart, sortedSymptoms);
+        
+        // Calculate cycle day numbers for all symptoms
+        this.calculateCycleDayNumbers(result, sortedSymptoms);
     }
     
     /**
@@ -551,6 +558,33 @@ export class DataHandler {
         }
         
         return periodSequenceStart;
+    }
+    
+    /**
+     * Calculate cycle day numbers for all symptoms (1-based)
+     */
+    private calculateCycleDayNumbers(result: CycleData, sortedSymptoms: DailySymptoms[]): void {
+        if (!result.lastPeriodStart) {
+            return;
+        }
+        
+        // Calculate cycle day for each symptom entry
+        for (const symptom of sortedSymptoms) {
+            // Don't calculate cycle days for dates before the period start
+            if (symptom.date < result.lastPeriodStart) {
+                symptom.cycleDay = null;
+                continue;
+            }
+            
+            // Calculate days since period start
+            const daysSinceStart = Math.floor(
+                (symptom.date.getTime() - result.lastPeriodStart.getTime()) / (1000 * 60 * 60 * 24)
+            );
+            
+            // Calculate cycle day (1-based, with cycle wrapping)
+            const cycleDay = (daysSinceStart % result.cycleLength) + 1;
+            symptom.cycleDay = cycleDay;
+        }
     }
     
     /**

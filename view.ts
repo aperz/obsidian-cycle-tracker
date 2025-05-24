@@ -257,9 +257,18 @@ export class CycleTrackerView extends ItemView {
             
             // Display days counter - only if prediction is valid
             if (predictions.isPredictionValid) {
+                // Check if we have calculated cycle day from symptoms data
+                const selectedDateSymptoms = cycleData.symptoms.find((s: any) => 
+                    s.date.getDate() === selectedDate.getDate() &&
+                    s.date.getMonth() === selectedDate.getMonth() &&
+                    s.date.getFullYear() === selectedDate.getFullYear()
+                );
+                
+                const cycleDayNumber = selectedDateSymptoms?.cycleDay || (predictions.daysSinceLastPeriod + 1);
+                
                 overviewSection.createDiv({ 
                     cls: "cycle-day-counter",
-                    text: `Day ${predictions.daysSinceLastPeriod} of cycle`
+                    text: `Day ${cycleDayNumber} of cycle`
                 });
             }
             
@@ -563,7 +572,18 @@ export class CycleTrackerView extends ItemView {
             
             // Add tooltip with cycle day information
             if (predictions.isPredictionValid) {
-                dayElement.setAttribute("aria-label", `Cycle Day ${predictions.cycleDay + 1}`);
+                // Check if we have calculated cycle day from symptoms data
+                const dateSymptoms = cycleData.symptoms.find((s: any) => 
+                    s.date.getDate() === date.getDate() &&
+                    s.date.getMonth() === date.getMonth() &&
+                    s.date.getFullYear() === date.getFullYear()
+                );
+                
+                const cycleDayText = dateSymptoms?.cycleDay ? 
+                    `Cycle Day ${dateSymptoms.cycleDay}` : 
+                    `Cycle Day ${predictions.cycleDay + 1}`;
+                    
+                dayElement.setAttribute("aria-label", cycleDayText);
                 dayElement.addClass("has-tooltip");
             }
             
@@ -626,6 +646,12 @@ export class CycleTrackerView extends ItemView {
         if (selectedDateSymptoms) {
             // Show symptoms for the selected date
             container.createEl("h3", { text: "Symptoms & Data" });
+            
+            // Cycle information
+            const cycleInfo = [];
+            if (selectedDateSymptoms.cycleDay !== null) {
+                cycleInfo.push({ name: "Cycle Day", value: selectedDateSymptoms.cycleDay.toString() });
+            }
             
             // Physical symptoms
             const physicalSymptoms = [];
@@ -691,6 +717,10 @@ export class CycleTrackerView extends ItemView {
             }
             
             // Render categories if they have data
+            if (cycleInfo.length > 0) {
+                this.renderSymptomCategory(container, "Cycle Information", cycleInfo);
+            }
+            
             if (physicalSymptoms.length > 0) {
                 this.renderSymptomCategory(container, "Physical Symptoms", physicalSymptoms);
             }
