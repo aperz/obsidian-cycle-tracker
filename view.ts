@@ -185,7 +185,7 @@ export class CycleTrackerView extends ItemView {
             isOvulation: false,
             nextPeriodDate: null as Date | null,
             daysToNextPeriod: 0,
-            isPredictionValid: true // Flag to indicate if prediction should be shown
+            isDateBeforeLastCycleStart: true
         };
         
         // Get period info from per-day data
@@ -197,7 +197,7 @@ export class CycleTrackerView extends ItemView {
         
         // Don't predict periods before the first observation, but still calculate fertile/ovulation
         if (date < periodInfo.lastPeriodStart) {
-            predictions.isPredictionValid = false;
+            predictions.isDateBeforeLastCycleStart = false;
         }
         
         // Calculate days since last period
@@ -259,24 +259,14 @@ export class CycleTrackerView extends ItemView {
                 s.date.getMonth() === selectedDate.getMonth() &&
                 s.date.getFullYear() === selectedDate.getFullYear()
             );
-            
-            // Display days counter - only if prediction is valid
-            if (predictions.isPredictionValid) {
-                // Check if we have calculated cycle day from symptoms data
-                const selectedDateSymptoms = cycleData.symptoms.find((s: any) => 
-                    s.date.getDate() === selectedDate.getDate() &&
-                    s.date.getMonth() === selectedDate.getMonth() &&
-                    s.date.getFullYear() === selectedDate.getFullYear()
-                );
-                
-                const cycleDayNumber = selectedDateSymptoms?.cycleDay || (predictions.daysSinceLastPeriod + 1);
-                
-                overviewSection.createDiv({ 
-                    cls: "cycle-day-counter",
-                    text: `Day ${cycleDayNumber} of cycle`
-                });
-            }
-            
+
+            const cycleDayNumber = selectedDateSymptoms?.cycleDay || (predictions.daysSinceLastPeriod + 1);
+
+            overviewSection.createDiv({
+                cls: "cycle-day-counter",
+                text: `Day ${cycleDayNumber} of cycle`
+            });
+
             // Display selected date
             overviewSection.createDiv({
                 cls: "selected-date",
@@ -284,7 +274,7 @@ export class CycleTrackerView extends ItemView {
             });
             
             // Display current phase - only if prediction is valid
-            if (predictions.isPredictionValid) {
+            if (predictions.isDateBeforeLastCycleStart) {
                 overviewSection.createDiv({ 
                     cls: "cycle-phase",
                     text: predictions.phase
@@ -294,7 +284,7 @@ export class CycleTrackerView extends ItemView {
             
             // Only show next period prediction if viewing today's date and prediction is valid
             const today = new Date();
-            if (predictions.isPredictionValid && 
+            if (predictions.isDateBeforeLastCycleStart && 
                 selectedDate.getDate() === today.getDate() &&
                 selectedDate.getMonth() === today.getMonth() &&
                 selectedDate.getFullYear() === today.getFullYear()) {
@@ -304,8 +294,8 @@ export class CycleTrackerView extends ItemView {
                 const isCloseToActualPeriod = nextPeriodDate ? 
                     this.isWithinDaysOfActualPeriod(nextPeriodDate, cycleData.symptoms, 16) : false;
                 
-                // Only show predicted next period if it's not close to an actual period
-                if (!isCloseToActualPeriod && nextPeriodDate) {
+                // Show message about the predicted next period
+                if (nextPeriodDate) {
                     overviewSection.createDiv({
                         text: `Next period expected in ${predictions.daysToNextPeriod} days`
                     });
@@ -313,7 +303,7 @@ export class CycleTrackerView extends ItemView {
             }
             
             // If we're looking at a date before the first observation, show a message
-            if (!predictions.isPredictionValid) {
+            if (!predictions.isDateBeforeLastCycleStart) {
                 overviewSection.createDiv({
                     cls: "no-prediction",
                     text: "No cycle data available for this date (before first recorded period)"
@@ -542,7 +532,7 @@ export class CycleTrackerView extends ItemView {
                 } else if (dateSymptoms.periodFlow.toLowerCase() === "spotting") {
                     dayElement.addClass("period-spotting");
                 }
-            } else if (predictions.isPredictionValid && predictions.cycleDay >= 0 && predictions.cycleDay < periodInfo.periodDuration) {
+            } else if (predictions.isDateBeforeLastCycleStart && predictions.cycleDay >= 0 && predictions.cycleDay < periodInfo.periodDuration) {
                 // Check if there's an actual period recorded within 16 days of this predicted period
                 const isCloseToActualPeriod = this.isWithinDaysOfActualPeriod(date, cycleData.symptoms, 16);
                 
@@ -569,7 +559,7 @@ export class CycleTrackerView extends ItemView {
             }
             
             // Add tooltip with cycle day information
-            if (predictions.isPredictionValid) {
+            if (predictions.isDateBeforeLastCycleStart) {
                 // Check if we have calculated cycle day from symptoms data
                 const dateSymptoms = cycleData.symptoms.find((s: any) => 
                     s.date.getDate() === date.getDate() &&
