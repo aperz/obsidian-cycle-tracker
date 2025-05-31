@@ -522,13 +522,14 @@ export class CycleTrackerView extends ItemView {
                 } else if (dateSymptoms.periodFlow.toLowerCase() === "spotting") {
                     dayElement.addClass("period-spotting");
                 }
-            } else if (!predictions.isCurrentCycle && predictions.cycleDay >= 0 && predictions.cycleDay < mostRecentCycleInfo.periodDuration) {
+            } else if ((predictions.isCurrentCycle || predictions.isFutureCycle) && predictions.cycleDay >= 0 && predictions.cycleDay < mostRecentCycleInfo.periodDuration) {
                 // Check if there's an actual period recorded within 16 days of this predicted period
                 const isCloseToActualPeriod = this.plugin.dataHandler.isWithinDaysOfActualPeriod(date, cycleData.symptoms, 16);
                 
                 // Only show predicted period if it's not close to an actual period
                 if (!isCloseToActualPeriod) {
                     // For dates without specific data, use cycle position - this is PREDICTED data
+                    // Only show predicted periods for current and future cycles, not past cycles
                     dayElement.addClass("period");
                     dayElement.addClass("predicted"); // Add the predicted class for styling
                 }

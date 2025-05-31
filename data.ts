@@ -1119,8 +1119,8 @@ export class DataHandler {
         // Calculate days to next period
         predictions.daysToNextPeriod = Math.floor((predictions.nextPeriodDate.getTime() - date.getTime()) / (1000 * 60 * 60 * 24));
 
-        // If we're still here then it must be a future cycle
-        if (predictions.nextPeriodDate < date) {
+        // If the date is after the next predicted period, it's a future cycle
+        if (date >= predictions.nextPeriodDate) {
             predictions.isFutureCycle = true;
         }
 
