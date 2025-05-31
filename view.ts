@@ -188,24 +188,27 @@ export class CycleTrackerView extends ItemView {
             isPredictionValid: true // Flag to indicate if prediction should be shown
         };
         
-        if (!cycleData.lastPeriodStart) {
+        // Get period info from per-day data
+        const periodInfo = this.plugin.dataHandler.getMostRecentPeriodInfo(cycleData);
+        
+        if (!periodInfo.lastPeriodStart) {
             return predictions;
         }
         
         // Don't predict periods before the first observation, but still calculate fertile/ovulation
-        if (date < cycleData.lastPeriodStart) {
+        if (date < periodInfo.lastPeriodStart) {
             predictions.isPredictionValid = false;
         }
         
         // Calculate days since last period
-        const lastPeriod = cycleData.lastPeriodStart;
+        const lastPeriod = periodInfo.lastPeriodStart;
         predictions.daysSinceLastPeriod = Math.floor((date.getTime() - lastPeriod.getTime()) / (1000 * 60 * 60 * 24));
         
         // Calculate cycle day position (normalize to handle past and future dates)
-        predictions.cycleDay = ((predictions.daysSinceLastPeriod % cycleData.cycleLength) + cycleData.cycleLength) % cycleData.cycleLength;
+        predictions.cycleDay = ((predictions.daysSinceLastPeriod % periodInfo.cycleLength) + periodInfo.cycleLength) % periodInfo.cycleLength;
         
         // Determine cycle phase
-        if (predictions.cycleDay < cycleData.periodDuration) {
+        if (predictions.cycleDay < periodInfo.periodDuration) {
             predictions.phase = "Menstrual Phase";
         } else if (predictions.cycleDay < 13) {
             predictions.phase = "Follicular Phase";
@@ -216,7 +219,7 @@ export class CycleTrackerView extends ItemView {
         }
         
         // Calculate ovulation day and fertile window
-        const ovulationDay = Math.max(cycleData.cycleLength - 14, 0);
+        const ovulationDay = Math.max(periodInfo.cycleLength - 14, 0);
         const fertileStart = Math.max(ovulationDay - 5, 0);
         const fertileEnd = ovulationDay + 2;
         
@@ -226,11 +229,11 @@ export class CycleTrackerView extends ItemView {
         
         // Calculate next period date and days until next period
         predictions.nextPeriodDate = new Date(lastPeriod);
-        predictions.nextPeriodDate.setDate(lastPeriod.getDate() + cycleData.cycleLength);
+        predictions.nextPeriodDate.setDate(lastPeriod.getDate() + periodInfo.cycleLength);
         
         // If the current date is after the next predicted period, calculate the next one
         while (predictions.nextPeriodDate < date) {
-            predictions.nextPeriodDate.setDate(predictions.nextPeriodDate.getDate() + cycleData.cycleLength);
+            predictions.nextPeriodDate.setDate(predictions.nextPeriodDate.getDate() + periodInfo.cycleLength);
         }
         
         // Calculate days to next period
@@ -242,8 +245,11 @@ export class CycleTrackerView extends ItemView {
     renderCycleOverview(container: HTMLElement, cycleData: any, selectedDate: Date) {
         const overviewSection = container.createDiv({ cls: "cycle-overview" });
         
+        // Get period info from per-day data
+        const periodInfo = this.plugin.dataHandler.getMostRecentPeriodInfo(cycleData);
+        
         // Check if we have valid cycle data
-        if (cycleData.lastPeriodStart) {
+        if (periodInfo.lastPeriodStart) {
             // Get cycle predictions for the selected date
             const predictions = this.calculateCyclePredictions(cycleData, selectedDate);
             
@@ -509,7 +515,8 @@ export class CycleTrackerView extends ItemView {
         });
         
         // Check for cycle-related markers if we have cycle data
-        if (cycleData.lastPeriodStart) {
+        const periodInfo = this.plugin.dataHandler.getMostRecentPeriodInfo(cycleData);
+        if (periodInfo.lastPeriodStart) {
             // Get cycle predictions for this day
             const predictions = this.calculateCyclePredictions(cycleData, date);
             
@@ -535,7 +542,7 @@ export class CycleTrackerView extends ItemView {
                 } else if (dateSymptoms.periodFlow.toLowerCase() === "spotting") {
                     dayElement.addClass("period-spotting");
                 }
-            } else if (predictions.isPredictionValid && predictions.cycleDay >= 0 && predictions.cycleDay < cycleData.periodDuration) {
+            } else if (predictions.isPredictionValid && predictions.cycleDay >= 0 && predictions.cycleDay < periodInfo.periodDuration) {
                 // Check if there's an actual period recorded within 16 days of this predicted period
                 const isCloseToActualPeriod = this.isWithinDaysOfActualPeriod(date, cycleData.symptoms, 16);
                 

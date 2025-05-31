@@ -4,10 +4,15 @@ import type { CycleTrackerSettings } from './settings';
 
 // Define interfaces for the data structures
 export interface CycleData {
-    lastPeriodStart: Date | null;
-    periodDuration: number;
-    cycleLength: number;
     symptoms: DailySymptoms[];
+}
+
+// Interface for representing individual period sequences
+export interface PeriodSequence {
+    startDate: Date;
+    endDate: Date;
+    duration: number; // Number of days with period flow
+    cycleLength: number | null; // Days from this period start to next period start
 }
 
 export interface DailySymptoms {
@@ -30,8 +35,11 @@ export interface DailySymptoms {
     alcoholConsumption: string | null;
     medication: string | null;
     sexualActivity: string | null;
-    // Calculated fields
+    // Calculated cycle fields
     cycleDay: number | null; // Day number in the cycle (1-based)
+    periodStart: Date | null; // Start date of the cycle this day belongs to
+    periodEnd: Date | null; // End date of the cycle this day belongs to
+    cycleLength: number | null; // Length of the cycle this day belongs to
 }
 
 export class DataHandler {
@@ -112,9 +120,6 @@ export class DataHandler {
         
         // Initialize empty result
         const result: CycleData = {
-            lastPeriodStart: null,
-            periodDuration: 5, // Default to 5 days
-            cycleLength: 28, // Default to 28 days
             symptoms: []
         };
         
@@ -137,9 +142,6 @@ export class DataHandler {
      */
     async getCycleDataWithDataview(settings: CycleTrackerSettings, startDate: Date, endDate: Date): Promise<CycleData> {
         const result: CycleData = {
-            lastPeriodStart: null,
-            periodDuration: 5,
-            cycleLength: 28,
             symptoms: []
         };
         
@@ -205,7 +207,10 @@ export class DataHandler {
                         alcoholConsumption: null,
                         medication: null,
                         sexualActivity: null,
-                        cycleDay: null // Will be calculated later
+                        cycleDay: null, // Will be calculated later
+                        periodStart: null, // Will be calculated later
+                        periodEnd: null, // Will be calculated later
+                        cycleLength: null // Will be calculated later
                     };
                     
                     // Extract properties based on settings
@@ -311,9 +316,6 @@ export class DataHandler {
      */
     async getCycleDataManually(settings: CycleTrackerSettings, startDate: Date, endDate: Date): Promise<CycleData> {
         const result: CycleData = {
-            lastPeriodStart: null,
-            periodDuration: 5,
-            cycleLength: 28,
             symptoms: []
         };
         
@@ -349,7 +351,10 @@ export class DataHandler {
                 alcoholConsumption: null,
                 medication: null,
                 sexualActivity: null,
-                cycleDay: null // Will be calculated later
+                cycleDay: null, // Will be calculated later
+                periodStart: null, // Will be calculated later
+                periodEnd: null, // Will be calculated later
+                cycleLength: null // Will be calculated later
             };
             
             // Extract properties from content using regex
@@ -496,8 +501,8 @@ export class DataHandler {
     }
     
     /**
-     * Calculate period duration and cycle length metrics for cycle data
-     * Finds the most recent period sequence and uses its first day as lastPeriodStart
+     * Calculate per-day cycle information for all symptoms
+     * Finds all period sequences and assigns cycle information to each day
      */
     private calculateCycleMetrics(result: CycleData): void {
         if (result.symptoms.length === 0) {
@@ -507,21 +512,171 @@ export class DataHandler {
         // Sort symptoms by date for chronological processing
         const sortedSymptoms = [...result.symptoms].sort((a, b) => a.date.getTime() - b.date.getTime());
         
-        // Find the most recent period sequence and set lastPeriodStart
-        result.lastPeriodStart = this.findMostRecentPeriodStart(sortedSymptoms);
+        // Find all period sequences in the data
+        const periodSequences = this.findAllPeriodSequences(sortedSymptoms);
         
-        if (!result.lastPeriodStart) {
+        if (periodSequences.length === 0) {
             return; // No period data found
         }
         
-        // Calculate period duration
-        result.periodDuration = this.calculatePeriodDuration(result.lastPeriodStart, sortedSymptoms);
+        // Calculate per-day cycle data for all symptoms
+        this.calculatePerDayCycleData(sortedSymptoms, periodSequences);
+    }
+    
+    /**
+     * Find all period sequences in the historical data
+     * A period sequence is consecutive days with period flow, allowing gaps of up to 4 days
+     */
+    private findAllPeriodSequences(sortedSymptoms: DailySymptoms[]): PeriodSequence[] {
+        // Get all dates with period flow
+        const periodDates = sortedSymptoms
+            .filter(s => s.periodFlow && s.periodFlow.toLowerCase() !== "none")
+            .map(s => s.date)
+            .sort((a, b) => a.getTime() - b.getTime()); // Sort chronologically
         
-        // Calculate cycle length
-        result.cycleLength = this.calculateCycleLength(result.lastPeriodStart, sortedSymptoms);
+        if (periodDates.length === 0) {
+            return [];
+        }
         
-        // Calculate cycle day numbers for all symptoms
-        this.calculateCycleDayNumbers(result, sortedSymptoms);
+        const sequences: PeriodSequence[] = [];
+        let currentSequenceStart = periodDates[0];
+        let currentSequenceEnd = periodDates[0];
+        
+        // Group consecutive period dates into sequences
+        for (let i = 1; i < periodDates.length; i++) {
+            const currentDate = periodDates[i];
+            const daysSinceLastPeriod = this.daysBetweenDates(currentSequenceEnd, currentDate);
+            
+            if (daysSinceLastPeriod <= 4) {
+                // This date is part of the current sequence
+                currentSequenceEnd = currentDate;
+            } else {
+                // Start a new sequence - first close the current one
+                const duration = this.countPeriodDaysInRange(sortedSymptoms, currentSequenceStart, currentSequenceEnd);
+                sequences.push({
+                    startDate: currentSequenceStart,
+                    endDate: currentSequenceEnd,
+                    duration: duration,
+                    cycleLength: null // Will be calculated below
+                });
+                
+                // Start new sequence
+                currentSequenceStart = currentDate;
+                currentSequenceEnd = currentDate;
+            }
+        }
+        
+        // Don't forget the last sequence
+        const duration = this.countPeriodDaysInRange(sortedSymptoms, currentSequenceStart, currentSequenceEnd);
+        sequences.push({
+            startDate: currentSequenceStart,
+            endDate: currentSequenceEnd,
+            duration: duration,
+            cycleLength: null
+        });
+        
+        // Calculate cycle lengths (days from one period start to the next)
+        for (let i = 0; i < sequences.length - 1; i++) {
+            const currentStart = sequences[i].startDate;
+            const nextStart = sequences[i + 1].startDate;
+            const cycleLength = this.daysBetweenDates(currentStart, nextStart);
+            
+            // Validate cycle length is within reasonable range
+            if (cycleLength >= 18 && cycleLength <= 40) {
+                sequences[i].cycleLength = cycleLength;
+            }
+        }
+        
+        return sequences;
+    }
+    
+    /**
+     * Count actual period days within a date range
+     */
+    private countPeriodDaysInRange(sortedSymptoms: DailySymptoms[], startDate: Date, endDate: Date): number {
+        return sortedSymptoms.filter(s => 
+            s.date >= startDate && 
+            s.date <= endDate && 
+            s.periodFlow && 
+            s.periodFlow.toLowerCase() !== "none"
+        ).length;
+    }
+    
+    /**
+     * Calculate per-day cycle data for all symptoms
+     * Assigns each day to its corresponding period sequence and calculates cycle information
+     */
+    private calculatePerDayCycleData(sortedSymptoms: DailySymptoms[], periodSequences: PeriodSequence[]): void {
+        for (const symptom of sortedSymptoms) {
+            // Find which period sequence this day belongs to
+            const belongsToSequence = this.findPeriodSequenceForDate(symptom.date, periodSequences);
+            
+            if (belongsToSequence) {
+                // Calculate cycle day within this sequence
+                const daysSinceStart = this.daysBetweenDates(belongsToSequence.startDate, symptom.date);
+                const cycleLength = belongsToSequence.cycleLength || 28;
+                
+                // Assign cycle information to this day
+                symptom.periodStart = belongsToSequence.startDate;
+                symptom.periodEnd = this.calculatePeriodEnd(belongsToSequence.startDate, cycleLength);
+                symptom.cycleLength = cycleLength;
+                symptom.cycleDay = (daysSinceStart % cycleLength) + 1;
+            } else {
+                // Day doesn't belong to any identified period sequence
+                // Try to assign it to the nearest future period sequence
+                const nearestFutureSequence = this.findNearestFutureSequence(symptom.date, periodSequences);
+                
+                if (nearestFutureSequence) {
+                    const cycleLength = nearestFutureSequence.cycleLength || 28;
+                    const periodStart = new Date(nearestFutureSequence.startDate);
+                    periodStart.setDate(periodStart.getDate() - cycleLength);
+                    
+                    const daysSinceStart = this.daysBetweenDates(periodStart, symptom.date);
+                    
+                    symptom.periodStart = periodStart;
+                    symptom.periodEnd = this.calculatePeriodEnd(periodStart, cycleLength);
+                    symptom.cycleLength = cycleLength;
+                    symptom.cycleDay = (daysSinceStart % cycleLength) + 1;
+                }
+            }
+        }
+    }
+    
+    /**
+     * Find the period sequence that a given date belongs to
+     */
+    private findPeriodSequenceForDate(date: Date, periodSequences: PeriodSequence[]): PeriodSequence | null {
+        for (const sequence of periodSequences) {
+            const cycleLength = sequence.cycleLength || 28;
+            const cycleEndDate = this.calculatePeriodEnd(sequence.startDate, cycleLength);
+            
+            // Check if date falls within this cycle
+            if (date >= sequence.startDate && date < cycleEndDate) {
+                return sequence;
+            }
+        }
+        return null;
+    }
+    
+    /**
+     * Find the nearest future period sequence for a date
+     */
+    private findNearestFutureSequence(date: Date, periodSequences: PeriodSequence[]): PeriodSequence | null {
+        for (const sequence of periodSequences) {
+            if (sequence.startDate > date) {
+                return sequence;
+            }
+        }
+        return null;
+    }
+    
+    /**
+     * Calculate the end date of a cycle period
+     */
+    private calculatePeriodEnd(periodStart: Date, cycleLength: number): Date {
+        const periodEnd = new Date(periodStart);
+        periodEnd.setDate(periodEnd.getDate() + cycleLength);
+        return periodEnd;
     }
     
     /**
@@ -558,33 +713,6 @@ export class DataHandler {
         }
         
         return periodSequenceStart;
-    }
-    
-    /**
-     * Calculate cycle day numbers for all symptoms (1-based)
-     */
-    private calculateCycleDayNumbers(result: CycleData, sortedSymptoms: DailySymptoms[]): void {
-        if (!result.lastPeriodStart) {
-            return;
-        }
-        
-        // Calculate cycle day for each symptom entry
-        for (const symptom of sortedSymptoms) {
-            // Don't calculate cycle days for dates before the period start
-            if (symptom.date < result.lastPeriodStart) {
-                symptom.cycleDay = null;
-                continue;
-            }
-            
-            // Calculate days since period start
-            const daysSinceStart = Math.floor(
-                (symptom.date.getTime() - result.lastPeriodStart.getTime()) / (1000 * 60 * 60 * 24)
-            );
-            
-            // Calculate cycle day (1-based, with cycle wrapping)
-            const cycleDay = (daysSinceStart % result.cycleLength) + 1;
-            symptom.cycleDay = cycleDay;
-        }
     }
     
     /**
@@ -678,6 +806,46 @@ export class DataHandler {
         
         // Return default cycle length if calculation failed or was outside normal range
         return 28;
+    }
+    
+    /**
+     * Get the most recent period information from per-day data
+     */
+    getMostRecentPeriodInfo(cycleData: CycleData): { lastPeriodStart: Date | null; periodDuration: number; cycleLength: number } {
+        if (!cycleData.symptoms || cycleData.symptoms.length === 0) {
+            return { lastPeriodStart: null, periodDuration: 5, cycleLength: 28 };
+        }
+        
+        // Find the most recent day with period data
+        const periodDays = cycleData.symptoms
+            .filter(s => s.periodFlow && s.periodFlow.toLowerCase() !== "none")
+            .sort((a, b) => b.date.getTime() - a.date.getTime()); // Sort newest first
+        
+        if (periodDays.length === 0) {
+            return { lastPeriodStart: null, periodDuration: 5, cycleLength: 28 };
+        }
+        
+        const mostRecentPeriodDay = periodDays[0];
+        
+        return {
+            lastPeriodStart: mostRecentPeriodDay.periodStart,
+            periodDuration: this.calculatePeriodDurationFromSequence(mostRecentPeriodDay.periodStart, cycleData.symptoms),
+            cycleLength: mostRecentPeriodDay.cycleLength || 28
+        };
+    }
+    
+    /**
+     * Calculate period duration from a period start date and symptoms
+     */
+    private calculatePeriodDurationFromSequence(periodStart: Date | null, symptoms: DailySymptoms[]): number {
+        if (!periodStart) return 5;
+        
+        // Count consecutive days with period flow from the period start
+        const periodDays = symptoms
+            .filter(s => s.periodStart && s.periodStart.getTime() === periodStart.getTime())
+            .filter(s => s.periodFlow && s.periodFlow.toLowerCase() !== "none");
+        
+        return periodDays.length > 0 ? periodDays.length : 5;
     }
     
     /**

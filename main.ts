@@ -56,11 +56,12 @@ export default class CycleTracker extends Plugin {
 		
 		try {
 			const cycleData = await this.getCycleData();
+			const periodInfo = this.dataHandler.getMostRecentPeriodInfo(cycleData);
 			
-			if (cycleData.lastPeriodStart) {
+			if (periodInfo.lastPeriodStart) {
 				const today = new Date();
 				const daysSinceLastPeriod = Math.floor(
-					(today.getTime() - cycleData.lastPeriodStart.getTime()) / (1000 * 60 * 60 * 24)
+					(today.getTime() - periodInfo.lastPeriodStart.getTime()) / (1000 * 60 * 60 * 24)
 				);
 				
 				statusBarItem.setText(`Cycle: Day ${daysSinceLastPeriod}`);
