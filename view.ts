@@ -9,10 +9,12 @@ export const VIEW_TYPE_CYCLE_TRACKER = "cycle-tracker-view";
  */
 class RawDataModal extends Modal {
     data: any;
+    plugin: CycleTracker;
     
-    constructor(app: any, data: any) {
+    constructor(app: any, data: any, plugin: CycleTracker) {
         super(app);
         this.data = data;
+        this.plugin = plugin;
     }
     
     onOpen() {
@@ -24,7 +26,7 @@ class RawDataModal extends Modal {
         
         // Add explanation
         contentEl.createEl('p', {
-            text: 'This is the raw data used by the Cycle Tracker plugin. You can copy this for backup or debugging purposes.'
+            text: 'This is the raw data used by the Cycle Tracker plugin, including predictions for each day. You can copy this for backup or debugging purposes.'
         });
         
         // Create container for the JSON data
@@ -69,14 +71,44 @@ class RawDataModal extends Modal {
             return value;
         }));
         
-        // Format symptoms dates
+        // Add prediction data to each symptom entry
         if (result.symptoms && Array.isArray(result.symptoms)) {
             result.symptoms.forEach((symptom: any) => {
                 if (symptom.date) {
                     // Format as readable date
                     symptom.dateFormatted = new Date(symptom.date).toDateString();
+                    
+                    // Calculate and add prediction data for this date
+                    const dateObj = new Date(symptom.date);
+                    const predictions = this.plugin.dataHandler.calculateCyclePredictions(data, dateObj);
+                    
+                    // Add prediction data to the symptom entry
+                    symptom.predictions = {
+                        daysSinceLastPeriod: predictions.daysSinceLastPeriod,
+                        cycleDay: predictions.cycleDay,
+                        phase: predictions.phase,
+                        isFertileWindow: predictions.isFertileWindow,
+                        isOvulation: predictions.isOvulation,
+                        nextPeriodDate: predictions.nextPeriodDate ? predictions.nextPeriodDate.toISOString() : null,
+                        nextPeriodDateFormatted: predictions.nextPeriodDate ? predictions.nextPeriodDate.toDateString() : null,
+                        daysToNextPeriod: predictions.daysToNextPeriod,
+                        isBeforeFirstData: predictions.isBeforeFirstData,
+                        isPastCycle: predictions.isPastCycle,
+                        isCurrentCycle: predictions.isCurrentCycle,
+                        isFutureCycle: predictions.isFutureCycle
+                    };
                 }
             });
+            
+            // Add summary prediction information
+            result.predictionSummary = {
+                generatedAt: new Date().toISOString(),
+                generatedAtFormatted: new Date().toLocaleString(),
+                totalDaysWithData: result.symptoms.length,
+                recentCycleInfo: this.plugin.dataHandler.getMostRecentCycleInfo(data),
+                firstRecordedDate: this.plugin.dataHandler.getFirstRecordedDate(data)?.toISOString() || null,
+                firstRecordedPeriodDate: this.plugin.dataHandler.getFirstRecordedPeriodDate(data)?.toISOString() || null
+            };
         }
         
         return result;
@@ -143,8 +175,8 @@ export class CycleTrackerView extends ItemView {
         });
         
         viewDataButton.addEventListener("click", () => {
-            // Open modal with raw data
-            const modal = new RawDataModal(this.app, this.cycleData);
+            // Open modal with raw data and plugin reference
+            const modal = new RawDataModal(this.app, this.cycleData, this.plugin);
             modal.open();
         });
         
