@@ -174,89 +174,10 @@ export class CycleTrackerView extends ItemView {
 
     /**
      * Calculate cycle predictions for a given date
-     * Centralizes prediction logic for phase, fertile window, ovulation, and next period
+     * Delegates to DataHandler for prediction logic
      */
     calculateCyclePredictions(cycleData: any, date: Date) {
-        const predictions = {
-            daysSinceLastPeriod: 0,
-            cycleDay: 0,
-            phase: "Unknown phase",
-            isFertileWindow: false,
-            isOvulation: false,
-            nextPeriodDate: null as Date | null,
-            daysToNextPeriod: 0,
-            isBeforeFirstData: false,
-            isPastCycle: false,
-            isCurrentCycle: false,
-            isFutureCycle: false
-        };
-        // If the selected date is before first recorded period, skip predictions
-        const firstRecordedPeriodDate = this.plugin.dataHandler.getFirstRecordedPeriodDate(cycleData);
-        if (date < firstRecordedPeriodDate) {
-            predictions.isBeforeFirstData = true;
-            return predictions;
-        }
-
-        // // If the selected date is a past period
-        const mostRecentCycleInfo = this.plugin.dataHandler.getMostRecentCycleInfo(cycleData);
-        const lastPeriod = mostRecentCycleInfo.lastPeriodStart;
-        if (date < lastPeriod) {
-            predictions.isPastCycle = true;
-        }
-
-        // Calculate days since last period
-        predictions.daysSinceLastPeriod = Math.floor((date.getTime() - lastPeriod.getTime()) / (1000 * 60 * 60 * 24));
-        // Calculate cycle day position (normalize to handle past and future dates)
-        predictions.cycleDay = ((predictions.daysSinceLastPeriod % mostRecentCycleInfo.cycleLength) + mostRecentCycleInfo.cycleLength) % mostRecentCycleInfo.cycleLength;
-
-        if (predictions.isPastCycle) {
-            return predictions;
-        }
-
-
-        // // If selected date is in current cycle
-
-        // Calculate next period date and days until next period
-        predictions.nextPeriodDate = new Date(lastPeriod);
-        predictions.nextPeriodDate.setDate(lastPeriod.getDate() + mostRecentCycleInfo.cycleLength);
-
-        if (date < predictions.nextPeriodDate) {
-            predictions.isCurrentCycle = true;
-        }
-
-        // Determine cycle phase
-        if (predictions.cycleDay < mostRecentCycleInfo.periodDuration) {
-            predictions.phase = "Menstrual Phase";
-        } else if (predictions.cycleDay < 13) {
-            predictions.phase = "Follicular Phase";
-        } else if (predictions.cycleDay < 17) {
-            predictions.phase = "Ovulation Phase";
-        } else {
-            predictions.phase = "Luteal Phase";
-        }
-        
-        // Calculate ovulation day and fertile window
-        const ovulationDay = Math.max(mostRecentCycleInfo.cycleLength - 14, 0);
-        const fertileStart = Math.max(ovulationDay - 5, 0);
-        const fertileEnd = ovulationDay + 2;
-        
-        // Set fertile window and ovulation flags
-        predictions.isFertileWindow = (predictions.cycleDay >= fertileStart && predictions.cycleDay <= fertileEnd);
-        predictions.isOvulation = (predictions.cycleDay === ovulationDay);
-        
-        // // If the current date is after the next predicted period, calculate the next one based on the most recent cycle length
-        while (predictions.nextPeriodDate < date) {
-            predictions.nextPeriodDate.setDate(predictions.nextPeriodDate.getDate() + mostRecentCycleInfo.cycleLength);
-        }
-        // Calculate days to next period
-        predictions.daysToNextPeriod = Math.floor((predictions.nextPeriodDate.getTime() - date.getTime()) / (1000 * 60 * 60 * 24));
-
-        // If we're still here then it must be a future cycle
-        if (predictions.nextPeriodDate < date) {
-            predictions.isFutureCycle = true;
-        }
-
-        return predictions;
+        return this.plugin.dataHandler.calculateCyclePredictions(cycleData, date);
     }
 
     renderCycleOverview(container: HTMLElement, cycleData: any, selectedDate: Date) {
@@ -275,7 +196,7 @@ export class CycleTrackerView extends ItemView {
         // Check if we have valid cycle data
         if (selectedDateSymptoms) {
             // Get cycle predictions for the selected date
-            const predictions = this.calculateCyclePredictions(cycleData, selectedDate);
+            const predictions = this.plugin.dataHandler.calculateCyclePredictions(cycleData, selectedDate);
 
             // Check if selected date has actual period data
             const selectedDateSymptoms = cycleData.symptoms.find((s: any) =>
@@ -346,7 +267,7 @@ export class CycleTrackerView extends ItemView {
 
             // Check if predicted next period is within 16 days of an actual recorded period
             const isCloseToActualPeriod = predictions.nextPeriodDate ?
-                this.isWithinDaysOfActualPeriod(predictions.nextPeriodDate, cycleData.symptoms, 16) : false;
+                this.plugin.dataHandler.isWithinDaysOfActualPeriod(predictions.nextPeriodDate, cycleData.symptoms, 16) : false;
 
 
         } else {
@@ -545,7 +466,7 @@ export class CycleTrackerView extends ItemView {
         const mostRecentCycleInfo = this.plugin.dataHandler.getMostRecentCycleInfo(cycleData);
         if (mostRecentCycleInfo.lastPeriodStart) {
             // Get cycle predictions for this day
-            const predictions = this.calculateCyclePredictions(cycleData, date);
+            const predictions = this.plugin.dataHandler.calculateCyclePredictions(cycleData, date);
             
             // Check for symptoms data for this specific date
             const dateSymptoms = cycleData.symptoms.find((s: any) => 
@@ -571,7 +492,7 @@ export class CycleTrackerView extends ItemView {
                 }
             } else if (!predictions.isCurrentCycle && predictions.cycleDay >= 0 && predictions.cycleDay < mostRecentCycleInfo.periodDuration) {
                 // Check if there's an actual period recorded within 16 days of this predicted period
-                const isCloseToActualPeriod = this.isWithinDaysOfActualPeriod(date, cycleData.symptoms, 16);
+                const isCloseToActualPeriod = this.plugin.dataHandler.isWithinDaysOfActualPeriod(date, cycleData.symptoms, 16);
                 
                 // Only show predicted period if it's not close to an actual period
                 if (!isCloseToActualPeriod) {
@@ -619,28 +540,7 @@ export class CycleTrackerView extends ItemView {
         }
     }
     
-    /**
-     * Check if a date is within the specified number of days of an actual recorded period
-     */
-    private isWithinDaysOfActualPeriod(date: Date, symptoms: any[], withinDays: number): boolean {
-        if (!symptoms || symptoms.length === 0) {
-            return false;
-        }
-        
-        // Find any dates with actual period flow recorded
-        const periodsRecorded = symptoms.filter(s => 
-            s.periodFlow && s.periodFlow.toLowerCase() !== "none"
-        );
-        
-        // Check if any of those dates are within the specified number of days
-        return periodsRecorded.some(periodData => {
-            const periodDate = periodData.date;
-            const daysDifference = Math.abs(
-                Math.floor((date.getTime() - periodDate.getTime()) / (1000 * 60 * 60 * 24))
-            );
-            return daysDifference <= withinDays;
-        });
-    }
+
     
     /**
      * Create a legend item in the calendar

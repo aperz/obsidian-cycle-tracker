@@ -1034,6 +1034,123 @@ export class DataHandler {
     }
 
     /**
+     * Calculate cycle predictions for a given date
+     * Centralizes prediction logic for phase, fertile window, ovulation, and next period
+     */
+    calculateCyclePredictions(cycleData: CycleData, date: Date) {
+        const predictions = {
+            daysSinceLastPeriod: 0,
+            cycleDay: 0,
+            phase: "Unknown phase",
+            isFertileWindow: false,
+            isOvulation: false,
+            nextPeriodDate: null as Date | null,
+            daysToNextPeriod: 0,
+            isBeforeFirstData: false,
+            isPastCycle: false,
+            isCurrentCycle: false,
+            isFutureCycle: false
+        };
+        
+        // If the selected date is before first recorded period, skip predictions
+        const firstRecordedPeriodDate = this.getFirstRecordedPeriodDate(cycleData);
+        if (!firstRecordedPeriodDate || date < firstRecordedPeriodDate) {
+            predictions.isBeforeFirstData = true;
+            return predictions;
+        }
+
+        // Get the most recent cycle information
+        const mostRecentCycleInfo = this.getMostRecentCycleInfo(cycleData);
+        const lastPeriod = mostRecentCycleInfo.lastPeriodStart;
+        
+        if (!lastPeriod) {
+            predictions.isBeforeFirstData = true;
+            return predictions;
+        }
+        
+        // If the selected date is before the last period start
+        if (date < lastPeriod) {
+            predictions.isPastCycle = true;
+        }
+
+        // Calculate days since last period
+        predictions.daysSinceLastPeriod = Math.floor((date.getTime() - lastPeriod.getTime()) / (1000 * 60 * 60 * 24));
+        
+        // Calculate cycle day position (normalize to handle past and future dates)
+        predictions.cycleDay = ((predictions.daysSinceLastPeriod % mostRecentCycleInfo.cycleLength) + mostRecentCycleInfo.cycleLength) % mostRecentCycleInfo.cycleLength;
+
+        if (predictions.isPastCycle) {
+            return predictions;
+        }
+
+        // Calculate next period date and days until next period
+        predictions.nextPeriodDate = new Date(lastPeriod);
+        predictions.nextPeriodDate.setDate(lastPeriod.getDate() + mostRecentCycleInfo.cycleLength);
+
+        if (date < predictions.nextPeriodDate) {
+            predictions.isCurrentCycle = true;
+        }
+
+        // Determine cycle phase
+        if (predictions.cycleDay < mostRecentCycleInfo.periodDuration) {
+            predictions.phase = "Menstrual Phase";
+        } else if (predictions.cycleDay < 13) {
+            predictions.phase = "Follicular Phase";
+        } else if (predictions.cycleDay < 17) {
+            predictions.phase = "Ovulation Phase";
+        } else {
+            predictions.phase = "Luteal Phase";
+        }
+        
+        // Calculate ovulation day and fertile window
+        const ovulationDay = Math.max(mostRecentCycleInfo.cycleLength - 14, 0);
+        const fertileStart = Math.max(ovulationDay - 5, 0);
+        const fertileEnd = ovulationDay + 2;
+        
+        // Set fertile window and ovulation flags
+        predictions.isFertileWindow = (predictions.cycleDay >= fertileStart && predictions.cycleDay <= fertileEnd);
+        predictions.isOvulation = (predictions.cycleDay === ovulationDay);
+        
+        // If the current date is after the next predicted period, calculate the next one based on the most recent cycle length
+        while (predictions.nextPeriodDate < date) {
+            predictions.nextPeriodDate.setDate(predictions.nextPeriodDate.getDate() + mostRecentCycleInfo.cycleLength);
+        }
+        
+        // Calculate days to next period
+        predictions.daysToNextPeriod = Math.floor((predictions.nextPeriodDate.getTime() - date.getTime()) / (1000 * 60 * 60 * 24));
+
+        // If we're still here then it must be a future cycle
+        if (predictions.nextPeriodDate < date) {
+            predictions.isFutureCycle = true;
+        }
+
+        return predictions;
+    }
+
+    /**
+     * Check if a date is within the specified number of days of an actual recorded period
+     */
+    isWithinDaysOfActualPeriod(date: Date, symptoms: DailySymptoms[], withinDays: number): boolean {
+        if (!symptoms || symptoms.length === 0) {
+            return false;
+        }
+        
+        // Find any dates with actual period flow recorded
+        const periodsRecorded = symptoms.filter(s => 
+            s.periodFlow && s.periodFlow.toLowerCase() !== "none"
+        );
+        
+        // Check if any of those dates are within the specified number of days
+        return periodsRecorded.some(periodData => {
+            const periodDate = periodData.date;
+            const daysDifference = Math.abs(
+                Math.floor((date.getTime() - periodDate.getTime()) / (1000 * 60 * 60 * 24))
+            );
+            return daysDifference <= withinDays;
+        });
+    }
+
+    /**
      * Parse boolean value from various string formats
      */
     parseBoolean(value: string | boolean): boolean | null {
