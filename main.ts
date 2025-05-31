@@ -56,7 +56,7 @@ export default class CycleTracker extends Plugin {
 		
 		try {
 			const cycleData = await this.getCycleData();
-			const periodInfo = this.dataHandler.getMostRecentPeriodInfo(cycleData);
+			const periodInfo = this.dataHandler.getMostRecentCycleInfo(cycleData);
 			
 			if (periodInfo.lastPeriodStart) {
 				const today = new Date();
