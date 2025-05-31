@@ -334,6 +334,8 @@ export class DataHandler {
         // Calculate periodDuration and cycleLength if we have enough data
         if (result.symptoms.length > 0) {
             this.calculateCycleMetrics(result);
+            // Fill missing dates with empty symptoms but cycle data
+            this.fillMissingDates(result);
         }
 
         return result;
@@ -475,6 +477,8 @@ export class DataHandler {
         // Calculate period duration and cycle length using same logic as in dataview method
         if (result.symptoms.length > 0) {
             this.calculateCycleMetrics(result);
+            // Fill missing dates with empty symptoms but cycle data
+            this.fillMissingDates(result);
         }
         
         return result;
@@ -876,6 +880,159 @@ export class DataHandler {
         return periodDays.length > 0 ? periodDays.length : 5;
     }
     
+    /**
+     * Fill missing dates with empty symptoms but populated cycle data
+     * Adds observations for any date after the first recorded date with missing data
+     */
+    private fillMissingDates(result: CycleData): void {
+        if (!result.symptoms || result.symptoms.length === 0) {
+            return;
+        }
+
+        // Get the first recorded date
+        const firstRecordedDate = this.getFirstRecordedDate(result);
+        if (!firstRecordedDate) {
+            return;
+        }
+
+        // Get today's date
+        const today = new Date();
+        today.setHours(0, 0, 0, 0); // Reset time to start of day
+
+        // Create a set of existing dates for quick lookup
+        const existingDates = new Set(
+            result.symptoms.map(s => this.getDateKey(s.date))
+        );
+
+        // Get all period sequences for cycle calculations
+        const periodSequences = this.findAllPeriodSequences(
+            [...result.symptoms].sort((a, b) => a.date.getTime() - b.date.getTime())
+        );
+
+        // Iterate through all dates from first recorded date to today
+        const currentDate = new Date(firstRecordedDate);
+        const missingEntries: DailySymptoms[] = [];
+
+        while (currentDate <= today) {
+            const dateKey = this.getDateKey(currentDate);
+            
+            // If this date doesn't exist in our data, create an entry
+            if (!existingDates.has(dateKey)) {
+                const missingEntry = this.createEmptySymptomEntry(new Date(currentDate));
+                
+                // Calculate cycle information for this missing date
+                this.calculateCycleInfoForDate(missingEntry, periodSequences);
+                
+                missingEntries.push(missingEntry);
+            }
+            
+            // Move to next day
+            currentDate.setDate(currentDate.getDate() + 1);
+        }
+
+        // Add missing entries to the result
+        result.symptoms.push(...missingEntries);
+        
+        // Sort all symptoms by date to maintain chronological order
+        result.symptoms.sort((a, b) => a.date.getTime() - b.date.getTime());
+    }
+
+    /**
+     * Create a date key for quick lookup (YYYY-MM-DD format)
+     */
+    private getDateKey(date: Date): string {
+        return `${date.getFullYear()}-${(date.getMonth() + 1).toString().padStart(2, '0')}-${date.getDate().toString().padStart(2, '0')}`;
+    }
+
+    /**
+     * Create an empty symptom entry with null values for all symptoms
+     */
+    private createEmptySymptomEntry(date: Date): DailySymptoms {
+        return {
+            date: date,
+            periodFlow: null,
+            discharge: null,
+            cramps: null,
+            bloating: null,
+            breastTenderness: null,
+            headaches: null,
+            bowelChanges: null,
+            mood: null,
+            energyLevels: null,
+            anxiety: null,
+            concentration: null,
+            sexDrive: null,
+            physicalActivity: null,
+            nutrition: null,
+            waterIntake: null,
+            alcoholConsumption: null,
+            medication: null,
+            sexualActivity: null,
+            cycleDay: null, // Will be calculated
+            cycleStart: null, // Will be calculated
+            cycleEnd: null, // Will be calculated
+            cycleLength: null // Will be calculated
+        };
+    }
+
+    /**
+     * Calculate cycle information for a specific date using existing period sequences
+     */
+    private calculateCycleInfoForDate(symptom: DailySymptoms, periodSequences: PeriodSequence[]): void {
+        // Find which period sequence this date belongs to
+        const belongsToSequence = this.findPeriodSequenceForDate(symptom.date, periodSequences);
+        
+        if (belongsToSequence) {
+            // Calculate cycle day within this sequence
+            const daysSinceStart = this.daysBetweenDates(belongsToSequence.startDate, symptom.date);
+            const cycleLength = belongsToSequence.cycleLength || 28;
+            
+            // Assign cycle information to this day
+            symptom.cycleStart = belongsToSequence.startDate;
+            symptom.cycleEnd = this.calculatePeriodEnd(belongsToSequence.startDate, cycleLength);
+            symptom.cycleLength = cycleLength;
+            symptom.cycleDay = (daysSinceStart % cycleLength) + 1;
+        } else {
+            // Day doesn't belong to any identified period sequence
+            // Try to assign it to the nearest future period sequence
+            const nearestFutureSequence = this.findNearestFutureSequence(symptom.date, periodSequences);
+            
+            if (nearestFutureSequence) {
+                const cycleLength = nearestFutureSequence.cycleLength || 28;
+                const cycleStart = new Date(nearestFutureSequence.startDate);
+                cycleStart.setDate(cycleStart.getDate() - cycleLength);
+                
+                const daysSinceStart = this.daysBetweenDates(cycleStart, symptom.date);
+                
+                symptom.cycleStart = cycleStart;
+                symptom.cycleEnd = this.calculatePeriodEnd(cycleStart, cycleLength);
+                symptom.cycleLength = cycleLength;
+                symptom.cycleDay = (daysSinceStart % cycleLength) + 1;
+            } else {
+                // Fallback: use the most recent period sequence and extrapolate
+                if (periodSequences.length > 0) {
+                    const lastSequence = periodSequences[periodSequences.length - 1];
+                    const cycleLength = lastSequence.cycleLength || 28;
+                    
+                    // Calculate how many complete cycles have passed since the last sequence
+                    const daysSinceLastSequence = this.daysBetweenDates(lastSequence.startDate, symptom.date);
+                    const cyclesElapsed = Math.floor(daysSinceLastSequence / cycleLength);
+                    
+                    // Calculate the projected cycle start for this date
+                    const projectedCycleStart = new Date(lastSequence.startDate);
+                    projectedCycleStart.setDate(projectedCycleStart.getDate() + (cyclesElapsed * cycleLength));
+                    
+                    const daysSinceProjectedStart = this.daysBetweenDates(projectedCycleStart, symptom.date);
+                    
+                    symptom.cycleStart = projectedCycleStart;
+                    symptom.cycleEnd = this.calculatePeriodEnd(projectedCycleStart, cycleLength);
+                    symptom.cycleLength = cycleLength;
+                    symptom.cycleDay = (daysSinceProjectedStart % cycleLength) + 1;
+                }
+            }
+        }
+    }
+
     /**
      * Parse boolean value from various string formats
      */
