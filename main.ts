@@ -104,6 +104,8 @@ export default class CycleTracker extends Plugin {
 
     async saveSettings() {
         await this.saveData(this.settings);
+        // Clear cached folder path when settings change
+        this.dataProcessor.clearFolderPathCache();
         this.updateViews();
         this.updateStatusBar();
     }

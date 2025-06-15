@@ -521,6 +521,95 @@ export class DataProcessor {
 
     // === UTILITY METHODS ===
 
+    /**
+     * Unified property extraction method that works with both Dataview pages and manual content
+     * @param symptom The symptom object to populate
+     * @param source Either a Dataview page object or file content string
+     * @param settings Plugin settings containing property names and tracking flags
+     * @param isDataviewPage Whether the source is a Dataview page object
+     */
+    private extractSymptomProperty(
+        symptom: DailySymptoms, 
+        source: any | string, 
+        settings: CycleTrackerSettings, 
+        isDataviewPage: boolean
+    ): void {
+        // Helper function to get property value
+        const getPropertyValue = (propertyName: string): string | null => {
+            if (isDataviewPage) {
+                return source[propertyName] || null;
+            } else {
+                return this.extractProperty(source as string, propertyName);
+            }
+        };
+
+        // Helper function to get boolean property value
+        const getBooleanPropertyValue = (propertyName: string): boolean | null => {
+            const value = getPropertyValue(propertyName);
+            return value ? this.parseBoolean(value) : null;
+        };
+
+        // Physical symptoms
+        if (settings.trackPeriodFlow) {
+            symptom.periodFlow = getPropertyValue(settings.periodFlowProperty);
+        }
+        if (settings.trackDischarge) {
+            symptom.discharge = getPropertyValue(settings.dischargeProperty);
+        }
+        if (settings.trackCramps) {
+            symptom.cramps = getBooleanPropertyValue(settings.crampsProperty);
+        }
+        if (settings.trackBloating) {
+            symptom.bloating = getBooleanPropertyValue(settings.bloatingProperty);
+        }
+        if (settings.trackBreastTenderness) {
+            symptom.breastTenderness = getBooleanPropertyValue(settings.breastTendernessProperty);
+        }
+        if (settings.trackHeadaches) {
+            symptom.headaches = getBooleanPropertyValue(settings.headachesProperty);
+        }
+        if (settings.trackBowelChanges) {
+            symptom.bowelChanges = getPropertyValue(settings.bowelChangesProperty);
+        }
+        
+        // Emotional and mental state
+        if (settings.trackMood) {
+            symptom.mood = getPropertyValue(settings.moodProperty);
+        }
+        if (settings.trackEnergyLevels) {
+            symptom.energyLevels = getPropertyValue(settings.energyLevelsProperty);
+        }
+        if (settings.trackAnxiety) {
+            symptom.anxiety = getPropertyValue(settings.anxietyProperty);
+        }
+        if (settings.trackConcentration) {
+            symptom.concentration = getPropertyValue(settings.concentrationProperty);
+        }
+        if (settings.trackSexDrive) {
+            symptom.sexDrive = getPropertyValue(settings.sexDriveProperty);
+        }
+        
+        // Lifestyle factors
+        if (settings.trackPhysicalActivity) {
+            symptom.physicalActivity = getPropertyValue(settings.physicalActivityProperty);
+        }
+        if (settings.trackNutrition) {
+            symptom.nutrition = getPropertyValue(settings.nutritionProperty);
+        }
+        if (settings.trackWaterIntake) {
+            symptom.waterIntake = getPropertyValue(settings.waterIntakeProperty);
+        }
+        if (settings.trackAlcoholConsumption) {
+            symptom.alcoholConsumption = getPropertyValue(settings.alcoholConsumptionProperty);
+        }
+        if (settings.trackMedication) {
+            symptom.medication = getPropertyValue(settings.medicationProperty);
+        }
+        if (settings.trackSexualActivity) {
+            symptom.sexualActivity = getPropertyValue(settings.sexualActivityProperty);
+        }
+    }
+
     private hasDataviewPlugin(): boolean {
         // @ts-ignore
         return this.app.plugins.plugins.dataview !== undefined;
@@ -626,131 +715,13 @@ export class DataProcessor {
     }
 
     private extractSymptomsFromPage(symptom: DailySymptoms, page: any, settings: CycleTrackerSettings): void {
-        // Physical symptoms
-        if (settings.trackPeriodFlow && page[settings.periodFlowProperty]) {
-            symptom.periodFlow = page[settings.periodFlowProperty];
-        }
-        if (settings.trackDischarge && page[settings.dischargeProperty]) {
-            symptom.discharge = page[settings.dischargeProperty];
-        }
-        if (settings.trackCramps && page[settings.crampsProperty]) {
-            symptom.cramps = this.parseBoolean(page[settings.crampsProperty]);
-        }
-        if (settings.trackBloating && page[settings.bloatingProperty]) {
-            symptom.bloating = this.parseBoolean(page[settings.bloatingProperty]);
-        }
-        if (settings.trackBreastTenderness && page[settings.breastTendernessProperty]) {
-            symptom.breastTenderness = this.parseBoolean(page[settings.breastTendernessProperty]);
-        }
-        if (settings.trackHeadaches && page[settings.headachesProperty]) {
-            symptom.headaches = this.parseBoolean(page[settings.headachesProperty]);
-        }
-        if (settings.trackBowelChanges && page[settings.bowelChangesProperty]) {
-            symptom.bowelChanges = page[settings.bowelChangesProperty];
-        }
-        
-        // Emotional and mental state
-        if (settings.trackMood && page[settings.moodProperty]) {
-            symptom.mood = page[settings.moodProperty];
-        }
-        if (settings.trackEnergyLevels && page[settings.energyLevelsProperty]) {
-            symptom.energyLevels = page[settings.energyLevelsProperty];
-        }
-        if (settings.trackAnxiety && page[settings.anxietyProperty]) {
-            symptom.anxiety = page[settings.anxietyProperty];
-        }
-        if (settings.trackConcentration && page[settings.concentrationProperty]) {
-            symptom.concentration = page[settings.concentrationProperty];
-        }
-        if (settings.trackSexDrive && page[settings.sexDriveProperty]) {
-            symptom.sexDrive = page[settings.sexDriveProperty];
-        }
-        
-        // Lifestyle factors
-        if (settings.trackPhysicalActivity && page[settings.physicalActivityProperty]) {
-            symptom.physicalActivity = page[settings.physicalActivityProperty];
-        }
-        if (settings.trackNutrition && page[settings.nutritionProperty]) {
-            symptom.nutrition = page[settings.nutritionProperty];
-        }
-        if (settings.trackWaterIntake && page[settings.waterIntakeProperty]) {
-            symptom.waterIntake = page[settings.waterIntakeProperty];
-        }
-        if (settings.trackAlcoholConsumption && page[settings.alcoholConsumptionProperty]) {
-            symptom.alcoholConsumption = page[settings.alcoholConsumptionProperty];
-        }
-        if (settings.trackMedication && page[settings.medicationProperty]) {
-            symptom.medication = page[settings.medicationProperty];
-        }
-        if (settings.trackSexualActivity && page[settings.sexualActivityProperty]) {
-            symptom.sexualActivity = page[settings.sexualActivityProperty];
-        }
+        // Use unified extraction method for Dataview pages
+        this.extractSymptomProperty(symptom, page, settings, true);
     }
 
     private extractSymptomsFromContent(symptom: DailySymptoms, content: string, settings: CycleTrackerSettings): void {
-        // Physical symptoms
-        if (settings.trackPeriodFlow) {
-            symptom.periodFlow = this.extractProperty(content, settings.periodFlowProperty);
-        }
-        if (settings.trackDischarge) {
-            symptom.discharge = this.extractProperty(content, settings.dischargeProperty);
-        }
-        if (settings.trackCramps) {
-            const crampsValue = this.extractProperty(content, settings.crampsProperty);
-            symptom.cramps = crampsValue ? this.parseBoolean(crampsValue) : null;
-        }
-        if (settings.trackBloating) {
-            const bloatingValue = this.extractProperty(content, settings.bloatingProperty);
-            symptom.bloating = bloatingValue ? this.parseBoolean(bloatingValue) : null;
-        }
-        if (settings.trackBreastTenderness) {
-            const breastTendernessValue = this.extractProperty(content, settings.breastTendernessProperty);
-            symptom.breastTenderness = breastTendernessValue ? this.parseBoolean(breastTendernessValue) : null;
-        }
-        if (settings.trackHeadaches) {
-            const headachesValue = this.extractProperty(content, settings.headachesProperty);
-            symptom.headaches = headachesValue ? this.parseBoolean(headachesValue) : null;
-        }
-        if (settings.trackBowelChanges) {
-            symptom.bowelChanges = this.extractProperty(content, settings.bowelChangesProperty);
-        }
-        
-        // Emotional and mental state
-        if (settings.trackMood) {
-            symptom.mood = this.extractProperty(content, settings.moodProperty);
-        }
-        if (settings.trackEnergyLevels) {
-            symptom.energyLevels = this.extractProperty(content, settings.energyLevelsProperty);
-        }
-        if (settings.trackAnxiety) {
-            symptom.anxiety = this.extractProperty(content, settings.anxietyProperty);
-        }
-        if (settings.trackConcentration) {
-            symptom.concentration = this.extractProperty(content, settings.concentrationProperty);
-        }
-        if (settings.trackSexDrive) {
-            symptom.sexDrive = this.extractProperty(content, settings.sexDriveProperty);
-        }
-        
-        // Lifestyle factors
-        if (settings.trackPhysicalActivity) {
-            symptom.physicalActivity = this.extractProperty(content, settings.physicalActivityProperty);
-        }
-        if (settings.trackNutrition) {
-            symptom.nutrition = this.extractProperty(content, settings.nutritionProperty);
-        }
-        if (settings.trackWaterIntake) {
-            symptom.waterIntake = this.extractProperty(content, settings.waterIntakeProperty);
-        }
-        if (settings.trackAlcoholConsumption) {
-            symptom.alcoholConsumption = this.extractProperty(content, settings.alcoholConsumptionProperty);
-        }
-        if (settings.trackMedication) {
-            symptom.medication = this.extractProperty(content, settings.medicationProperty);
-        }
-        if (settings.trackSexualActivity) {
-            symptom.sexualActivity = this.extractProperty(content, settings.sexualActivityProperty);
-        }
+        // Use unified extraction method for manual content parsing
+        this.extractSymptomProperty(symptom, content, settings, false);
     }
 
     private extractProperty(content: string, propertyName: string): string | null {
@@ -800,7 +771,7 @@ export class DataProcessor {
     private async getDailyNotes(startDate: Date, endDate: Date): Promise<TFile[]> {
         const dailyNotes: TFile[] = [];
         const files = this.app.vault.getMarkdownFiles();
-        const dailyNotesFolder = this.validateFolderPath(this.plugin.settings.dailyNotesFolder);
+        const dailyNotesFolder = this.getValidatedFolderPath();
         
         for (const file of files) {
             const filePath = file.path;

@@ -391,7 +391,7 @@ export class CycleTrackerView extends ItemView {
         dayElement.addClass("has-tooltip");
         
         // Add symptom indicator if symptoms exist
-        const dateKey = this.formatDateKey(date);
+        const dateKey = this.dataProcessor.formatDateKey(date);
         const symptoms = this.cycleData.symptoms.get(dateKey);
         if (symptoms && this.hasSymptoms(symptoms)) {
             dayElement.createDiv({ cls: "symptom-indicator" });
@@ -417,7 +417,7 @@ export class CycleTrackerView extends ItemView {
     renderSymptomDetails(container: HTMLElement, selectedDate: Date) {
         if (!this.cycleData) return;
         
-        const dateKey = this.formatDateKey(selectedDate);
+        const dateKey = this.dataProcessor.formatDateKey(selectedDate);
         const symptoms = this.cycleData.symptoms.get(dateKey);
         const cycleInfo = this.dataProcessor.getCycleInfo(this.cycleData, selectedDate);
         
@@ -430,23 +430,7 @@ export class CycleTrackerView extends ItemView {
         }
         
         container.createEl("h3", { text: "Day Details" });
-        
-        // Cycle information section
-        if (cycleInfo) {
-            const cycleSection = container.createDiv({ cls: "symptom-category" });
-            cycleSection.createDiv({ cls: "symptom-title", text: "Cycle Information" });
-            
-            const cycleGrid = cycleSection.createDiv({ cls: "symptom-grid" });
-            
-            // Create cycle info cards using the symptom-grid layout
-            this.createSymptomCard(cycleGrid, "Cycle Day", cycleInfo.cycleDay.toString());
-            this.createSymptomCard(cycleGrid, "Phase", this.formatPhase(cycleInfo.phase));
-            this.createSymptomCard(cycleGrid, "Period Start", cycleInfo.cycle.startDate.toLocaleDateString());
-            if (cycleInfo.cycle.cycleLength) {
-                this.createSymptomCard(cycleGrid, "Cycle Length", `${cycleInfo.cycle.cycleLength} days`);
-            }
-        }
-        
+
         // Symptoms sections using symptom-grid layout
         if (symptoms) {
             const symptomData = this.formatSymptomsForDisplay(symptoms);
@@ -524,10 +508,6 @@ export class CycleTrackerView extends ItemView {
         return date1.getDate() === date2.getDate() &&
                date1.getMonth() === date2.getMonth() &&
                date1.getFullYear() === date2.getFullYear();
-    }
-
-    private formatDateKey(date: Date): string {
-        return `${date.getFullYear()}-${(date.getMonth() + 1).toString().padStart(2, '0')}-${date.getDate().toString().padStart(2, '0')}`;
     }
 
     private hasSymptoms(symptoms: DailySymptoms): boolean {
@@ -657,7 +637,7 @@ export class CycleTrackerView extends ItemView {
     private async openDailyNote(date: Date) {
         try {
             // Format date for daily note filename (YYYY-MM-DD)
-            const dateStr = this.formatDateKey(date);
+            const dateStr = this.dataProcessor.formatDateKey(date);
             const fileName = `${dateStr}.md`;
             const dailyNotesFolder = this.plugin.settings.dailyNotesFolder || 'Daily Notes';
             const filePath = `${dailyNotesFolder}/${fileName}`;
