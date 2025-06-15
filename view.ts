@@ -207,15 +207,30 @@ export class CycleTrackerView extends ItemView {
                 text: this.formatPhase(cycleInfo.phase)
             });
             
-            // Show next period prediction (only for current/future)
-            const nextPeriodDate = this.dataProcessor.getNextPeriodDate(this.cycleData);
-            if (nextPeriodDate && nextPeriodDate > new Date()) {
-                const daysToNext = Math.ceil((nextPeriodDate.getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24));
-                overviewSection.createDiv({
-                    cls: "next-period",
-                    text: `Next period expected in ${daysToNext} days`
-                });
+            // Determine cycle type and show appropriate additional information
+            const cycleType = this.dataProcessor.getCycleType(this.cycleData, selectedDate);
+            
+            if (cycleType === 'current') {
+                // Show next period prediction only for current cycle
+                const nextPeriodDate = this.dataProcessor.getNextPeriodDate(this.cycleData);
+                if (nextPeriodDate && nextPeriodDate > new Date()) {
+                    const daysToNext = Math.ceil((nextPeriodDate.getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24));
+                    overviewSection.createDiv({
+                        cls: "cycle-info",
+                        text: `Next period expected in ${daysToNext} days`
+                    });
+                }
+            } else if (cycleType === 'past') {
+                // Show cycle length for past cycles
+                if (cycleInfo.cycle.cycleLength) {
+                    overviewSection.createDiv({
+                        cls: "cycle-info",
+                        text: `Cycle length: ${cycleInfo.cycle.cycleLength} days`
+                    });
+                }
             }
+            // For 'future' or 'none' cycle types, don't show additional info but maintain height
+            
         } else {
             overviewSection.createDiv({
                 cls: "no-cycle-info",

@@ -141,6 +141,41 @@ export class DataProcessor {
         return sortedCycles[0].startDate;
     }
 
+    /**
+     * Determine what type of cycle a date belongs to
+     */
+    getCycleType(data: CycleData, date: Date): 'current' | 'past' | 'future' | 'none' {
+        if (data.cycles.length === 0) return 'none';
+        
+        const today = new Date();
+        const latestCycle = data.cycles[data.cycles.length - 1];
+        
+        // Get cycle info to see if date belongs to any cycle
+        const cycleInfo = this.getCycleInfo(data, date);
+        if (!cycleInfo) return 'none';
+        
+        // Check if this is the latest (current) cycle
+        if (cycleInfo.cycle.id === latestCycle.id) {
+            // If the cycle start is in the future, it's a future cycle
+            if (cycleInfo.cycle.startDate > today) {
+                return 'future';
+            }
+            // If we're in the current cycle or it's ongoing
+            return 'current';
+        }
+        
+        // Check if the cycle is from the past
+        const cycleLength = this.getPredictedCycleLength(data.cycles, cycleInfo.cycle);
+        const cycleEndDate = new Date(cycleInfo.cycle.startDate);
+        cycleEndDate.setDate(cycleEndDate.getDate() + cycleLength - 1);
+        
+        if (cycleEndDate < today) {
+            return 'past';
+        }
+        
+        return 'none';
+    }
+
     // === PRIVATE IMPLEMENTATION ===
 
     /**
