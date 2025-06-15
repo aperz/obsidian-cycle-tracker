@@ -1,4 +1,4 @@
-import { App, TFile } from 'obsidian';
+import { App } from 'obsidian';
 import type CycleTracker from './main';
 import type { CycleTrackerSettings } from './settings';
 
@@ -195,7 +195,7 @@ export class DataProcessor {
     // === PRIVATE IMPLEMENTATION ===
 
     /**
-     * Load raw symptom data from daily notes (no cycle calculations)
+     * Load raw symptom data from daily notes using Dataview only
      */
     private async loadRawSymptoms(settings: CycleTrackerSettings, months: number): Promise<Map<string, DailySymptoms>> {
         const symptoms = new Map<string, DailySymptoms>();
@@ -206,14 +206,15 @@ export class DataProcessor {
         startDate.setMonth(startDate.getMonth() - months);
         
         try {
-            // Try Dataview first, fall back to manual
-            if (this.hasDataviewPlugin()) {
-                await this.loadSymptomsWithDataview(symptoms, settings, startDate, endDate);
-            } else {
-                await this.loadSymptomsManually(symptoms, settings, startDate, endDate);
+            // Require Dataview plugin
+            if (!this.hasDataviewPlugin()) {
+                throw new Error('Dataview plugin is required for cycle tracking. Please install and enable the Dataview plugin.');
             }
+            
+            await this.loadSymptomsWithDataview(symptoms, settings, startDate, endDate);
         } catch (error) {
             console.error('Error loading symptoms:', error);
+            throw error; // Re-throw to let caller handle
         }
 
         console.log(`Loaded ${symptoms.size} days of symptom data`);
@@ -522,28 +523,22 @@ export class DataProcessor {
     // === UTILITY METHODS ===
 
     /**
-     * Unified property extraction method that works with both Dataview pages and manual content
+     * Extract symptoms from Dataview page data
      * @param symptom The symptom object to populate
-     * @param source Either a Dataview page object or file content string
+     * @param page Dataview page object
      * @param settings Plugin settings containing property names and tracking flags
-     * @param isDataviewPage Whether the source is a Dataview page object
      */
-    private extractSymptomProperty(
+    private extractSymptomsFromDataviewPage(
         symptom: DailySymptoms, 
-        source: any | string, 
-        settings: CycleTrackerSettings, 
-        isDataviewPage: boolean
+        page: any, 
+        settings: CycleTrackerSettings
     ): void {
-        // Helper function to get property value
+        // Helper function to get property value from Dataview page
         const getPropertyValue = (propertyName: string): string | null => {
-            if (isDataviewPage) {
-                return source[propertyName] || null;
-            } else {
-                return this.extractProperty(source as string, propertyName);
-            }
+            return page[propertyName] || null;
         };
 
-        // Helper function to get boolean property value
+        // Helper function to get boolean property value from Dataview page
         const getBooleanPropertyValue = (propertyName: string): boolean | null => {
             const value = getPropertyValue(propertyName);
             return value ? this.parseBoolean(value) : null;
@@ -669,27 +664,6 @@ export class DataProcessor {
         }
     }
 
-    private async loadSymptomsManually(
-        symptoms: Map<string, DailySymptoms>, 
-        settings: CycleTrackerSettings, 
-        startDate: Date, 
-        endDate: Date
-    ): Promise<void> {
-        const dailyNotes = await this.getDailyNotes(startDate, endDate);
-
-        for (const file of dailyNotes) {
-            const date = this.tryParseDateFromFilename(file.basename);
-            if (!date) continue;
-
-            const content = await this.app.vault.read(file);
-            const symptom = this.createEmptySymptom(date);
-            this.extractSymptomsFromContent(symptom, content, settings);
-            
-            const dateKey = this.formatDateKey(date);
-            symptoms.set(dateKey, symptom);
-        }
-    }
-
     private createEmptySymptom(date: Date): DailySymptoms {
         return {
             date,
@@ -715,43 +689,8 @@ export class DataProcessor {
     }
 
     private extractSymptomsFromPage(symptom: DailySymptoms, page: any, settings: CycleTrackerSettings): void {
-        // Use unified extraction method for Dataview pages
-        this.extractSymptomProperty(symptom, page, settings, true);
-    }
-
-    private extractSymptomsFromContent(symptom: DailySymptoms, content: string, settings: CycleTrackerSettings): void {
-        // Use unified extraction method for manual content parsing
-        this.extractSymptomProperty(symptom, content, settings, false);
-    }
-
-    private extractProperty(content: string, propertyName: string): string | null {
-        const escapedProperty = this.escapeRegex(propertyName);
-        
-        // YAML front matter format
-        const yamlRegex = new RegExp(`${escapedProperty}:\\s*(.+?)(?:$|\\n)`, 'i');
-        const yamlMatch = content.match(yamlRegex);
-        if (yamlMatch && yamlMatch[1]) {
-            return yamlMatch[1].trim();
-        }
-        
-        // Dataview inline format
-        const inlineRegex = new RegExp(`${escapedProperty}::(.+?)(?:$|\\n)`, 'i');
-        const inlineMatch = content.match(inlineRegex);
-        if (inlineMatch && inlineMatch[1]) {
-            return inlineMatch[1].trim();
-        }
-        
-        return null;
-    }
-
-    private parseBoolean(value: string | boolean): boolean | null {
-        if (typeof value === 'boolean') return value;
-        if (typeof value !== 'string') return null;
-        
-        const lowerValue = value.toLowerCase().trim();
-        if (['yes', 'true', 'y', '1', 'on', 'checked'].includes(lowerValue)) return true;
-        if (['no', 'false', 'n', '0', 'off', 'unchecked'].includes(lowerValue)) return false;
-        return null;
+        // Use Dataview-specific extraction method
+        this.extractSymptomsFromDataviewPage(symptom, page, settings);
     }
 
     private tryParseDateFromFilename(filename: string): Date | null {
@@ -768,23 +707,15 @@ export class DataProcessor {
         return null;
     }
 
-    private async getDailyNotes(startDate: Date, endDate: Date): Promise<TFile[]> {
-        const dailyNotes: TFile[] = [];
-        const files = this.app.vault.getMarkdownFiles();
-        const dailyNotesFolder = this.getValidatedFolderPath();
+    private parseBoolean(value: string | boolean): boolean | null {
+        if (typeof value === 'boolean') return value;
+        if (typeof value !== 'string') return null;
         
-        for (const file of files) {
-            const filePath = file.path;
-            const isInDailyNotesFolder = filePath.startsWith(dailyNotesFolder + '/');
-            
-            if (isInDailyNotesFolder) {
-                const fileDate = this.tryParseDateFromFilename(file.basename);
-                if (fileDate && fileDate >= startDate && fileDate <= endDate) {
-                    dailyNotes.push(file);
-                }
-            }
-        }
-        
-        return dailyNotes;
+        const lowerValue = value.toLowerCase().trim();
+        if (['yes', 'true', 'y', '1', 'on', 'checked'].includes(lowerValue)) return true;
+        if (['no', 'false', 'n', '0', 'off', 'unchecked'].includes(lowerValue)) return false;
+        return null;
     }
+
+
 }

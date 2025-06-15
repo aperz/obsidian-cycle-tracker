@@ -121,10 +121,19 @@ export class CycleTrackerView extends ItemView {
             this.cycleData = await this.dataProcessor.loadCycleData(this.plugin.settings);
         } catch (error) {
             console.error('Failed to load cycle data:', error);
-            container.createDiv({
-                cls: "error-message",
-                text: "Failed to load cycle data. Check console for details."
-            });
+            
+            // Show specific error message for missing Dataview
+            if (error.message && error.message.includes('Dataview plugin is required')) {
+                container.createDiv({
+                    cls: "error-message",
+                    text: "Dataview plugin is required for cycle tracking. Please install and enable the Dataview plugin from the Community Plugins section."
+                });
+            } else {
+                container.createDiv({
+                    cls: "error-message",
+                    text: "Failed to load cycle data. Check console for details."
+                });
+            }
             return;
         }
         
