@@ -77,7 +77,7 @@ mood:: irritable
 
 In the plugin settings, you can:
 
-1. Change the Daily Notes folder location (default: "Daily Notes")
+1. Change the Daily Notes folder location
 2. Enable/disable tracking for specific symptoms
 3. Change the property names used in your daily notes
 4. Find a sample template for your daily notes
@@ -85,7 +85,7 @@ In the plugin settings, you can:
 ## Requirements
 
 - Obsidian v0.15.0 or higher
-- (Optional but recommended) Dataview plugin
+- Dataview plugin
 
 ## Installation
 
@@ -114,10 +114,15 @@ To add or modify variables to track, modify `setting.ts`
 
 ## License
 
-This project is licensed under the MIT License - see the LICENSE file for details.
+This project is licensed under the MIT License.
 
 ## Acknowledgements
 
 - Built with Claude Sonnet
 - Inspired by the Flo tracker app (https://flo.health/product-tour/tracking-cycle)
-- Built using the Obsidian Sample Plugin as a template 
+
+## Disclaimer
+Please treat the data that the plugin is showing you with a grain of salt. It's no good for rigorous 
+tracking, only for rough estimates!
+
+[!["Buy Me A Coffee"](https://www.buymeacoffee.com/assets/img/custom_images/orange_img.png)](https://www.buymeacoffee.com/alx_amber)
