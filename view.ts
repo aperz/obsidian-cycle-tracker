@@ -211,10 +211,10 @@ export class CycleTrackerView extends ItemView {
             const cycleType = this.dataProcessor.getCycleType(this.cycleData, selectedDate);
             
             if (cycleType === 'current') {
-                // Show next period prediction only for current cycle
-                const nextPeriodDate = this.dataProcessor.getNextPeriodDate(this.cycleData);
-                if (nextPeriodDate && nextPeriodDate > new Date()) {
-                    const daysToNext = Math.ceil((nextPeriodDate.getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24));
+                // Calculate days from selected date to predicted period end for current cycle
+                const predictedPeriodEnd = this.dataProcessor.getPredictedPeriodEndForCycle(this.cycleData, cycleInfo.cycle);
+                if (predictedPeriodEnd && predictedPeriodEnd > selectedDate) {
+                    const daysToNext = Math.ceil((predictedPeriodEnd.getTime() - selectedDate.getTime()) / (1000 * 60 * 60 * 24));
                     overviewSection.createDiv({
                         cls: "cycle-info",
                         text: `Next period expected in ${daysToNext} days`

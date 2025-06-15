@@ -131,6 +131,22 @@ export class DataProcessor {
     }
 
     /**
+     * Get predicted period end date for a specific cycle
+     */
+    getPredictedPeriodEndForCycle(data: CycleData, cycle: any): Date | null {
+        if (!cycle) return null;
+        
+        // Get the predicted cycle length for this specific cycle
+        const cycleLength = this.getPredictedCycleLength(data.cycles, cycle);
+        
+        // Calculate the end of this cycle (start of next period)
+        const cycleEndDate = new Date(cycle.startDate);
+        cycleEndDate.setDate(cycleEndDate.getDate() + cycleLength);
+        
+        return cycleEndDate;
+    }
+
+    /**
      * Get the first recorded period date (Day 1 of first cycle)
      */
     getFirstRecordedPeriodDate(data: CycleData): Date | null {
