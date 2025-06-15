@@ -19,6 +19,14 @@
     ]
   },
   "include": [
-    "**/*.ts"
+    "main.ts",
+    "view.ts",
+    "data.ts",
+    "settings.ts"
+  ],
+  "exclude": [
+    "backup/**/*",
+    "**/*-old.ts",
+    "node_modules"
   ]
 }

@@ -62,6 +62,7 @@ export interface CycleData {
 export class DataProcessor {
     private app: App;
     private plugin: CycleTracker;
+    private validatedFolderPath: string | null = null;
     
     constructor(app: App, plugin: CycleTracker) {
         this.app = app;
@@ -610,7 +611,7 @@ export class DataProcessor {
         return this.app.plugins.plugins.dataview !== undefined;
     }
 
-    private formatDateKey(date: Date): string {
+    public formatDateKey(date: Date): string {
         return `${date.getFullYear()}-${(date.getMonth() + 1).toString().padStart(2, '0')}-${date.getDate().toString().padStart(2, '0')}`;
     }
 
@@ -626,6 +627,23 @@ export class DataProcessor {
         return folderPath.replace(/\.\./g, '').replace(/\/+/g, '/');
     }
 
+    /**
+     * Get cached validated folder path or validate and cache it
+     */
+    private getValidatedFolderPath(): string {
+        if (this.validatedFolderPath === null) {
+            this.validatedFolderPath = this.validateFolderPath(this.plugin.settings.dailyNotesFolder);
+        }
+        return this.validatedFolderPath;
+    }
+
+    /**
+     * Clear the cached folder path (call when settings change)
+     */
+    public clearFolderPathCache(): void {
+        this.validatedFolderPath = null;
+    }
+
     // === DATA LOADING METHODS ===
 
     private async loadSymptomsWithDataview(
@@ -638,7 +656,7 @@ export class DataProcessor {
         const dataviewApi = this.app.plugins.plugins.dataview?.api;
         if (!dataviewApi) throw new Error('Dataview not available');
 
-        const validatedFolderPath = this.validateFolderPath(this.plugin.settings.dailyNotesFolder);
+        const validatedFolderPath = this.getValidatedFolderPath();
         let pages;
 
         try {
