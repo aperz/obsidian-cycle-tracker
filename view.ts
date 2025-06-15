@@ -397,43 +397,81 @@ export class CycleTrackerView extends ItemView {
         
         container.createEl("h3", { text: "Day Details" });
         
-        // Cycle information
+        // Cycle information section
         if (cycleInfo) {
-            this.renderInfoSection(container, "Cycle Information", [
-                { name: "Cycle Day", value: cycleInfo.cycleDay.toString() },
-                { name: "Phase", value: this.formatPhase(cycleInfo.phase) },
-                { name: "Cycle ID", value: cycleInfo.cycle.id }
-            ]);
+            const cycleSection = container.createDiv({ cls: "symptom-category" });
+            cycleSection.createDiv({ cls: "symptom-title", text: "Cycle Information" });
+            
+            const cycleGrid = cycleSection.createDiv({ cls: "symptom-grid" });
+            
+            // Create cycle info cards using the symptom-grid layout
+            this.createSymptomCard(cycleGrid, "Cycle Day", cycleInfo.cycleDay.toString());
+            this.createSymptomCard(cycleGrid, "Phase", this.formatPhase(cycleInfo.phase));
+            this.createSymptomCard(cycleGrid, "Period Start", cycleInfo.cycle.startDate.toLocaleDateString());
+            if (cycleInfo.cycle.cycleLength) {
+                this.createSymptomCard(cycleGrid, "Cycle Length", `${cycleInfo.cycle.cycleLength} days`);
+            }
         }
         
-        // Symptoms
+        // Symptoms sections using symptom-grid layout
         if (symptoms) {
             const symptomData = this.formatSymptomsForDisplay(symptoms);
             
             if (symptomData.physical.length > 0) {
-                this.renderInfoSection(container, "Physical Symptoms", symptomData.physical);
+                this.renderSymptomSection(container, "Physical Symptoms", symptomData.physical);
             }
             
             if (symptomData.emotional.length > 0) {
-                this.renderInfoSection(container, "Emotional State", symptomData.emotional);
+                this.renderSymptomSection(container, "Emotional State", symptomData.emotional);
             }
             
             if (symptomData.lifestyle.length > 0) {
-                this.renderInfoSection(container, "Lifestyle Factors", symptomData.lifestyle);
+                this.renderSymptomSection(container, "Lifestyle Factors", symptomData.lifestyle);
             }
         }
     }
 
-    renderInfoSection(container: HTMLElement, title: string, items: Array<{name: string, value: string}>) {
-        const section = container.createDiv({ cls: "info-section" });
-        section.createDiv({ cls: "info-title", text: title });
+    renderSymptomSection(container: HTMLElement, title: string, items: Array<{name: string, value: string}>) {
+        const section = container.createDiv({ cls: "symptom-category" });
+        section.createDiv({ cls: "symptom-title", text: title });
         
-        const grid = section.createDiv({ cls: "info-grid" });
+        const grid = section.createDiv({ cls: "symptom-grid" });
         items.forEach(item => {
-            const card = grid.createDiv({ cls: "info-card" });
-            card.createDiv({ cls: "info-name", text: item.name });
-            card.createDiv({ cls: "info-value", text: item.value });
+            this.createSymptomCard(grid, item.name, item.value);
         });
+    }
+
+    createSymptomCard(container: HTMLElement, name: string, value: string) {
+        const card = container.createDiv({ cls: "symptom-card" });
+        
+        // Add intensity class based on value for visual indicators
+        const intensityClass = this.getIntensityClass(value);
+        if (intensityClass) {
+            card.addClass(intensityClass);
+        }
+        
+        card.createDiv({ cls: "symptom-name", text: name });
+        card.createDiv({ cls: "symptom-value", text: value });
+    }
+
+    getIntensityClass(value: string): string | null {
+        const lowerValue = value.toLowerCase();
+        
+        // Map common values to intensity classes
+        if (['none', 'no', 'normal'].includes(lowerValue)) {
+            return 'intensity-none';
+        }
+        if (['light', 'low', 'mild'].includes(lowerValue)) {
+            return 'intensity-low';
+        }
+        if (['medium', 'moderate'].includes(lowerValue)) {
+            return 'intensity-medium';
+        }
+        if (['heavy', 'high', 'severe', 'yes'].includes(lowerValue)) {
+            return 'intensity-high';
+        }
+        
+        return null;
     }
 
     // === UTILITY METHODS ===
