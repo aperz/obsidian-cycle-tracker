@@ -1,4 +1,4 @@
-import { ItemView, WorkspaceLeaf, Modal, Notice } from 'obsidian';
+import { ItemView, WorkspaceLeaf, Modal, Notice, TFile } from 'obsidian';
 import type CycleTracker from './main';
 import { DataProcessor, CycleData, CycleInfo, DailySymptoms } from './data';
 
@@ -84,6 +84,7 @@ export class CycleTrackerView extends ItemView {
     currentDisplayMonth: Date;
     selectedDate: Date | null;
     cycleData: CycleData | null = null;
+    contextMenu: HTMLElement | null = null;
 
     constructor(leaf: WorkspaceLeaf, plugin: CycleTracker) {
         super(leaf);
@@ -91,6 +92,7 @@ export class CycleTrackerView extends ItemView {
         this.dataProcessor = new DataProcessor(this.app, plugin);
         this.currentDisplayMonth = new Date();
         this.selectedDate = null;
+        this.contextMenu = null;
     }
 
     getViewType(): string {
@@ -328,6 +330,12 @@ export class CycleTrackerView extends ItemView {
         dayElement.addEventListener("click", () => {
             this.selectedDate = new Date(date.getTime());
             this.onOpen();
+        });
+        
+        // Add context menu handler
+        dayElement.addEventListener("contextmenu", (event) => {
+            event.preventDefault();
+            this.showContextMenu(event, date);
         });
         
         // Add cycle-related styling
@@ -576,5 +584,101 @@ export class CycleTrackerView extends ItemView {
         }
         
         return { physical, emotional, lifestyle };
+    }
+
+    // === CONTEXT MENU METHODS ===
+
+    /**
+     * Show context menu for calendar day
+     */
+    private showContextMenu(event: MouseEvent, date: Date) {
+        // Hide any existing context menu
+        this.hideContextMenu();
+        
+        // Create context menu
+        this.contextMenu = document.createElement('div');
+        this.contextMenu.className = 'cycle-tracker-context-menu';
+        
+        // Create menu item for opening daily note
+        const openNoteItem = this.contextMenu.createDiv({ cls: 'context-menu-item' });
+        openNoteItem.textContent = 'Open Daily Note';
+        openNoteItem.addEventListener('click', () => {
+            this.openDailyNote(date);
+            this.hideContextMenu();
+        });
+        
+        // Position the context menu
+        this.contextMenu.style.position = 'fixed';
+        this.contextMenu.style.left = `${event.clientX}px`;
+        this.contextMenu.style.top = `${event.clientY}px`;
+        this.contextMenu.style.zIndex = '1000';
+        
+        // Add to document
+        document.body.appendChild(this.contextMenu);
+        
+        // Add click outside handler to close menu
+        const hideHandler = (e: MouseEvent) => {
+            if (!this.contextMenu?.contains(e.target as Node)) {
+                this.hideContextMenu();
+                document.removeEventListener('click', hideHandler);
+            }
+        };
+        setTimeout(() => document.addEventListener('click', hideHandler), 0);
+    }
+
+    /**
+     * Hide context menu
+     */
+    private hideContextMenu() {
+        if (this.contextMenu) {
+            this.contextMenu.remove();
+            this.contextMenu = null;
+        }
+    }
+
+    /**
+     * Open daily note for the specified date
+     */
+    private async openDailyNote(date: Date) {
+        try {
+            // Format date for daily note filename (YYYY-MM-DD)
+            const dateStr = this.formatDateKey(date);
+            const fileName = `${dateStr}.md`;
+            const dailyNotesFolder = this.plugin.settings.dailyNotesFolder || 'Daily Notes';
+            const filePath = `${dailyNotesFolder}/${fileName}`;
+            
+            // Check if file exists
+            let file = this.app.vault.getAbstractFileByPath(filePath);
+            
+            if (!file) {
+                // Create the file if it doesn't exist
+                const folderPath = dailyNotesFolder;
+                
+                // Ensure the folder exists
+                if (!this.app.vault.getAbstractFileByPath(folderPath)) {
+                    await this.app.vault.createFolder(folderPath);
+                }
+                
+                // Create basic daily note content with date
+                const content = `# ${date.toLocaleDateString('default', {
+                    weekday: 'long',
+                    year: 'numeric',
+                    month: 'long',
+                    day: 'numeric'
+                })}\n\n`;
+                
+                file = await this.app.vault.create(filePath, content);
+            }
+            
+            // Open the file if it's a TFile
+            if (file instanceof TFile) {
+                const leaf = this.app.workspace.getLeaf(false);
+                await leaf.openFile(file);
+            }
+            
+        } catch (error) {
+            console.error('Error opening daily note:', error);
+            new Notice(`Failed to open daily note for ${date.toLocaleDateString()}`);
+        }
     }
 }
