@@ -110,8 +110,8 @@ export class DataProcessor {
             phase,
             isActualPeriodDay: this.isActualPeriodDay(symptoms),
             isPredictedPeriodDay: this.isPredictedPeriodDay(cycle, cycleDay, symptoms),
-            isFertileWindow: this.isFertileWindow(cycle, cycleDay, data.cycles),
-            isOvulationDay: this.isOvulationDay(cycle, cycleDay, data.cycles)
+            isFertileWindow: this.isFertileWindow(cycle, cycleDay, data.cycles, date),
+            isOvulationDay: this.isOvulationDay(cycle, cycleDay, data.cycles, date)
         };
     }
 
@@ -352,7 +352,15 @@ export class DataProcessor {
     /**
      * Check if date falls in fertile window
      */
-    private isFertileWindow(cycle: PeriodCycle, cycleDay: number, allCycles?: PeriodCycle[]): boolean {
+    private isFertileWindow(cycle: PeriodCycle, cycleDay: number, allCycles?: PeriodCycle[], date?: Date): boolean {
+        // Check if date is before first recorded period - no predictions before actual data
+        if (date && allCycles && allCycles.length > 0) {
+            const firstPeriodDate = this.getFirstRecordedPeriodDate({ cycles: allCycles } as CycleData);
+            if (firstPeriodDate && date < firstPeriodDate) {
+                return false;
+            }
+        }
+        
         // Use predicted cycle length for current cycle, actual length for historical cycles
         const cycleLength = allCycles ? this.getPredictedCycleLength(allCycles, cycle) : (cycle.cycleLength || 28);
         const ovulationDay = cycleLength - 14;
@@ -362,7 +370,15 @@ export class DataProcessor {
     /**
      * Check if date is predicted ovulation day
      */
-    private isOvulationDay(cycle: PeriodCycle, cycleDay: number, allCycles?: PeriodCycle[]): boolean {
+    private isOvulationDay(cycle: PeriodCycle, cycleDay: number, allCycles?: PeriodCycle[], date?: Date): boolean {
+        // Check if date is before first recorded period - no predictions before actual data
+        if (date && allCycles && allCycles.length > 0) {
+            const firstPeriodDate = this.getFirstRecordedPeriodDate({ cycles: allCycles } as CycleData);
+            if (firstPeriodDate && date < firstPeriodDate) {
+                return false;
+            }
+        }
+        
         // Use predicted cycle length for current cycle, actual length for historical cycles
         const cycleLength = allCycles ? this.getPredictedCycleLength(allCycles, cycle) : (cycle.cycleLength || 28);
         const ovulationDay = cycleLength - 14;
