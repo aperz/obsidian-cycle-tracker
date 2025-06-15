@@ -130,6 +130,17 @@ export class DataProcessor {
         return nextPeriodDate;
     }
 
+    /**
+     * Get the first recorded period date (Day 1 of first cycle)
+     */
+    getFirstRecordedPeriodDate(data: CycleData): Date | null {
+        if (data.cycles.length === 0) return null;
+        
+        // Find the earliest cycle start date
+        const sortedCycles = [...data.cycles].sort((a, b) => a.startDate.getTime() - b.startDate.getTime());
+        return sortedCycles[0].startDate;
+    }
+
     // === PRIVATE IMPLEMENTATION ===
 
     /**

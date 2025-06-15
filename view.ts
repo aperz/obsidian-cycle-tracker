@@ -178,6 +178,17 @@ export class CycleTrackerView extends ItemView {
 
         if (!this.cycleData) return;
 
+        // Check if selected date is before the first recorded period
+        const firstPeriodDate = this.dataProcessor.getFirstRecordedPeriodDate(this.cycleData);
+        if (firstPeriodDate && selectedDate < firstPeriodDate) {
+            // Display "No data" for dates before first recorded period
+            overviewSection.createDiv({
+                cls: "cycle-day-counter",
+                text: "No data"
+            });
+            return;
+        }
+
         // Get cycle info for selected date
         const cycleInfo = this.dataProcessor.getCycleInfo(this.cycleData, selectedDate);
         
