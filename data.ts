@@ -100,7 +100,7 @@ export class DataProcessor {
         if (!cycle) return null;
 
         const cycleDay = this.calculateCycleDay(cycle, date);
-        const phase = this.calculatePhase(cycle, cycleDay);
+        const phase = this.calculatePhase(cycle, cycleDay, data.cycles);
         const dayKey = this.formatDateKey(date);
         const symptoms = data.symptoms.get(dayKey);
         
@@ -110,8 +110,8 @@ export class DataProcessor {
             phase,
             isActualPeriodDay: this.isActualPeriodDay(symptoms),
             isPredictedPeriodDay: this.isPredictedPeriodDay(cycle, cycleDay, symptoms),
-            isFertileWindow: this.isFertileWindow(cycle, cycleDay),
-            isOvulationDay: this.isOvulationDay(cycle, cycleDay)
+            isFertileWindow: this.isFertileWindow(cycle, cycleDay, data.cycles),
+            isOvulationDay: this.isOvulationDay(cycle, cycleDay, data.cycles)
         };
     }
 
@@ -242,7 +242,7 @@ export class DataProcessor {
     private findCycleForDate(cycles: PeriodCycle[], date: Date): PeriodCycle | null {
         // Check if date falls within any known cycle
         for (const cycle of cycles) {
-            const cycleLength = cycle.cycleLength || this.calculateAverageCycleLength(cycles);
+            const cycleLength = this.getPredictedCycleLength(cycles, cycle);
             const cycleEndDate = new Date(cycle.startDate);
             cycleEndDate.setDate(cycleEndDate.getDate() + cycleLength - 1);
             
@@ -298,8 +298,9 @@ export class DataProcessor {
     /**
      * Calculate cycle phase based on cycle day
      */
-    private calculatePhase(cycle: PeriodCycle, cycleDay: number): 'menstrual' | 'follicular' | 'ovulation' | 'luteal' {
-        const cycleLength = cycle.cycleLength || 28;
+    private calculatePhase(cycle: PeriodCycle, cycleDay: number, allCycles?: PeriodCycle[]): 'menstrual' | 'follicular' | 'ovulation' | 'luteal' {
+        // Use predicted cycle length, falling back to 28 if no cycles available
+        const cycleLength = allCycles ? this.getPredictedCycleLength(allCycles, cycle) : (cycle.cycleLength || 28);
         
         if (cycleDay <= cycle.periodDays) {
             return 'menstrual';
@@ -340,8 +341,9 @@ export class DataProcessor {
     /**
      * Check if date falls in fertile window
      */
-    private isFertileWindow(cycle: PeriodCycle, cycleDay: number): boolean {
-        const cycleLength = cycle.cycleLength || 28;
+    private isFertileWindow(cycle: PeriodCycle, cycleDay: number, allCycles?: PeriodCycle[]): boolean {
+        // Use predicted cycle length for current cycle, actual length for historical cycles
+        const cycleLength = allCycles ? this.getPredictedCycleLength(allCycles, cycle) : (cycle.cycleLength || 28);
         const ovulationDay = cycleLength - 14;
         return cycleDay >= ovulationDay - 5 && cycleDay <= ovulationDay + 1;
     }
@@ -349,8 +351,9 @@ export class DataProcessor {
     /**
      * Check if date is predicted ovulation day
      */
-    private isOvulationDay(cycle: PeriodCycle, cycleDay: number): boolean {
-        const cycleLength = cycle.cycleLength || 28;
+    private isOvulationDay(cycle: PeriodCycle, cycleDay: number, allCycles?: PeriodCycle[]): boolean {
+        // Use predicted cycle length for current cycle, actual length for historical cycles
+        const cycleLength = allCycles ? this.getPredictedCycleLength(allCycles, cycle) : (cycle.cycleLength || 28);
         const ovulationDay = cycleLength - 14;
         return cycleDay === ovulationDay;
     }
@@ -367,6 +370,62 @@ export class DataProcessor {
         
         const sum = knownLengths.reduce((a, b) => a + b, 0);
         return Math.round(sum / knownLengths.length);
+    }
+
+    /**
+     * Calculate mean cycle length from the last 3 completed cycles
+     * Used for predicting current cycle length when not yet known
+     */
+    private calculateLast3CyclesMean(cycles: PeriodCycle[], excludeCurrentCycle: boolean = true): number {
+        // Get cycles with known lengths, excluding the most recent one if it's the current cycle
+        let availableCycles = cycles.filter(c => c.cycleLength !== undefined);
+        
+        // If excluding current cycle, remove the last cycle from consideration
+        if (excludeCurrentCycle && availableCycles.length > 0) {
+            // Check if the last cycle in the full cycles array has no cycleLength (indicating it's current)
+            const lastCycle = cycles[cycles.length - 1];
+            if (lastCycle.cycleLength === undefined) {
+                // The last cycle is indeed the current one, so we can use all available cycles
+                // (they're already filtered to only include those with known lengths)
+            } else {
+                // The last cycle has a length, so it's completed. Remove it if we want to exclude current.
+                // Actually, we want to exclude the conceptual "current" cycle, which would be
+                // any ongoing cycle. Since we're looking for prediction, we use completed cycles.
+            }
+        }
+        
+        // Get the last 3 cycles with known lengths
+        const last3Cycles = availableCycles.slice(-3);
+        
+        if (last3Cycles.length === 0) {
+            return 28; // Default fallback
+        }
+        
+        const cycleLengths = last3Cycles.map(c => c.cycleLength!); // We know these are defined
+        const sum = cycleLengths.reduce((a, b) => a + b, 0);
+        return Math.round(sum / cycleLengths.length);
+    }
+
+    /**
+     * Get predicted cycle length for a specific cycle
+     * Uses last 3 cycles mean for current cycle, actual length for historical cycles
+     */
+    private getPredictedCycleLength(cycles: PeriodCycle[], targetCycle: PeriodCycle): number {
+        // If the cycle has a known length, use it
+        if (targetCycle.cycleLength !== undefined) {
+            return targetCycle.cycleLength;
+        }
+        
+        // Check if this is the current (most recent) cycle
+        const isCurrentCycle = cycles.length > 0 && cycles[cycles.length - 1].id === targetCycle.id;
+        
+        if (isCurrentCycle) {
+            // For current cycle, use mean of last 3 cycles
+            return this.calculateLast3CyclesMean(cycles, true);
+        } else {
+            // For historical cycles or projections, use overall average
+            return this.calculateAverageCycleLength(cycles);
+        }
     }
 
     /**
